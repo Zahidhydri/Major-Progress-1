@@ -19,7 +19,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" className="dark" suppressHydrationWarning>
       <head>
         <link
           rel="stylesheet"
@@ -28,7 +28,10 @@ export default function RootLayout({
           crossOrigin=""
         />
       </head>
-      <body className="bg-slate-950 text-slate-100 min-h-screen antialiased select-none font-sans overflow-hidden">
+      <body
+        className="bg-slate-950 text-slate-100 min-h-screen antialiased select-none font-sans overflow-hidden"
+        suppressHydrationWarning
+      >
         {children}
       </body>
     </html>
