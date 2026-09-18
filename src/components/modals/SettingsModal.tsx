@@ -65,13 +65,16 @@ export default function SettingsModal({
                 }`}
               >
                 <div className="flex items-center space-x-3">
-                  <Radio className="w-4 h-4 text-slate-300" />
+                  <Radio className="w-4 h-4 text-cyan-400" />
                   <div>
-                    <div className="font-semibold text-slate-100">Hardware RTK GPS (MQTT)</div>
-                    <div className="text-[10px] text-slate-400">Uses RTK hardware if online (auto-falls back to Device GPS)</div>
+                    <div className="font-semibold text-slate-100 flex items-center gap-1.5">
+                      <span>Hardware RTK / Mobile Stream (MQTT)</span>
+                      <span className="text-[9px] bg-cyan-500/20 text-cyan-300 px-1.5 py-0.2 rounded font-mono">Laptop Mode</span>
+                    </div>
+                    <div className="text-[10px] text-slate-400">Receives live field movement broadcast from Mobile Phone or RTK Rover</div>
                   </div>
                 </div>
-                {formData.locationSource === 'mqtt' && <Check className="w-4 h-4 text-slate-200" />}
+                {formData.locationSource === 'mqtt' && <Check className="w-4 h-4 text-cyan-400" />}
               </button>
 
               <button
@@ -84,13 +87,16 @@ export default function SettingsModal({
                 }`}
               >
                 <div className="flex items-center space-x-3">
-                  <Smartphone className="w-4 h-4 text-slate-300" />
+                  <Smartphone className="w-4 h-4 text-emerald-400" />
                   <div>
-                    <div className="font-semibold text-slate-100">On-Device Mobile GPS</div>
-                    <div className="text-[10px] text-slate-400">Uses phone/tablet built-in location sensor</div>
+                    <div className="font-semibold text-slate-100 flex items-center gap-1.5">
+                      <span>On-Device Phone GPS (Field Rover)</span>
+                      <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.2 rounded font-mono">Mobile Phone Mode</span>
+                    </div>
+                    <div className="text-[10px] text-slate-400">Uses phone GPS as field hardware and broadcasts live movement to Laptop</div>
                   </div>
                 </div>
-                {formData.locationSource === 'device' && <Check className="w-4 h-4 text-slate-200" />}
+                {formData.locationSource === 'device' && <Check className="w-4 h-4 text-emerald-400" />}
               </button>
 
               <button
@@ -103,13 +109,16 @@ export default function SettingsModal({
                 }`}
               >
                 <div className="flex items-center space-x-3">
-                  <Gamepad2 className="w-4 h-4 text-slate-300" />
+                  <Gamepad2 className="w-4 h-4 text-purple-400" />
                   <div>
-                    <div className="font-semibold text-slate-100">Virtual Testing Emulator</div>
-                    <div className="text-[10px] text-slate-400">Simulated rover movement for field testing</div>
+                    <div className="font-semibold text-slate-100 flex items-center gap-1.5">
+                      <span>Virtual Joystick Controller</span>
+                      <span className="text-[9px] bg-purple-500/20 text-purple-300 px-1.5 py-0.2 rounded font-mono">D-Pad / WASD</span>
+                    </div>
+                    <div className="text-[10px] text-slate-400">Control rover manually using on-screen D-Pad or Arrow/WASD keys</div>
                   </div>
                 </div>
-                {formData.locationSource === 'emulator' && <Check className="w-4 h-4 text-slate-200" />}
+                {formData.locationSource === 'emulator' && <Check className="w-4 h-4 text-purple-400" />}
               </button>
 
               <a

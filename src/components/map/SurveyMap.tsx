@@ -145,7 +145,7 @@ export default function SurveyMap({
     ? [userLocation.lat, userLocation.lng]
     : searchedPlace
     ? [searchedPlace.lat, searchedPlace.lng]
-    : [27.7172, 85.3240];
+    : [21.1458, 79.0882];
 
   const tileLayers = {
     osm: {

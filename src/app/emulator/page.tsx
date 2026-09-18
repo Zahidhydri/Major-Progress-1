@@ -216,8 +216,8 @@ export default function RoverEmulatorPage() {
         setIsSurveying(true);
       }
       setCurrentPosition((prev) => {
-        const baseLat = prev ? prev.lat : 27.7172;
-        const baseLng = prev ? prev.lng : 85.3240;
+        const baseLat = prev ? prev.lat : 21.1458;
+        const baseLng = prev ? prev.lng : 79.0882;
         const newLat = baseLat + dLat;
         const newLng = baseLng + dLng;
         const accuracy = 0.02 + Math.random() * 0.02; // ±0.02m RTK precision

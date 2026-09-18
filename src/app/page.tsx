@@ -16,7 +16,7 @@ import {
 } from '@/types/survey';
 import { DEFAULT_MQTT_CONFIG, parseTelemetryPayload } from '@/lib/mqtt';
 import { calculateDistanceMeters } from '@/lib/geo';
-import { Compass } from 'lucide-react';
+import { Compass, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Gamepad2, ExternalLink } from 'lucide-react';
 
 export default function DashboardPage() {
   // App Settings
@@ -180,6 +180,89 @@ export default function DashboardPage() {
     }
   }, [settings.locationSource, settings.mqttBrokerUrl, settings.mqttTopic]);
 
+  // Step movement helper for Virtual Emulator Mode on Dashboard
+  const moveEmulatorStep = useCallback(
+    (dLat: number, dLng: number, heading: number) => {
+      setRoverLocation((prev) => {
+        const baseLat = prev ? prev.lat : (searchedPlace ? searchedPlace.lat : 21.1458);
+        const baseLng = prev ? prev.lng : (searchedPlace ? searchedPlace.lng : 79.0882);
+        const newLat = baseLat + dLat;
+        const newLng = baseLng + dLng;
+
+        const updatedLocation: GpsLocation = {
+          lat: Number(newLat.toFixed(7)),
+          lng: Number(newLng.toFixed(7)),
+          accuracy: 0.03,
+          altitude: 120.0,
+          heading,
+          speed: 1.4,
+          timestamp: Date.now(),
+        };
+
+        // Broadcast to MQTT if client connected
+        if (clientRef.current && clientRef.current.connected) {
+          clientRef.current.publish(
+            settings.mqttTopic,
+            JSON.stringify({
+              lat: updatedLocation.lat,
+              lng: updatedLocation.lng,
+              accuracy: 0.03,
+              altitude: 120.0,
+              heading,
+              speed: 1.4,
+              timestamp: updatedLocation.timestamp,
+              deviceId: 'DASHBOARD-EMULATOR',
+            }),
+            { qos: 0 }
+          );
+        }
+
+        return updatedLocation;
+      });
+    },
+    [searchedPlace, settings.mqttTopic]
+  );
+
+  // Keyboard navigation when Emulator mode is active on Dashboard
+  useEffect(() => {
+    if (settings.locationSource !== 'emulator') return;
+
+    const step = 0.00003; // ~3m per tap
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (document.activeElement?.tagName === 'INPUT') return;
+
+      switch (e.key) {
+        case 'ArrowUp':
+        case 'w':
+        case 'W':
+          e.preventDefault();
+          moveEmulatorStep(step, 0, 0);
+          break;
+        case 'ArrowDown':
+        case 's':
+        case 'S':
+          e.preventDefault();
+          moveEmulatorStep(-step, 0, 180);
+          break;
+        case 'ArrowLeft':
+        case 'a':
+        case 'A':
+          e.preventDefault();
+          moveEmulatorStep(0, -step * 1.3, 270);
+          break;
+        case 'ArrowRight':
+        case 'd':
+        case 'D':
+          e.preventDefault();
+          moveEmulatorStep(0, step * 1.3, 90);
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [settings.locationSource, moveEmulatorStep]);
+
   // 3. Virtual Device Emulator Mode (Starts at User's Real Location - No Forced Circle Loop)
   useEffect(() => {
     if (settings.locationSource === 'emulator') {
@@ -201,8 +284,8 @@ export default function DashboardPage() {
           },
           (err) => {
             console.warn('Emulator real location fallback:', err.message);
-            const baseLat = searchedPlace ? searchedPlace.lat : 27.7172;
-            const baseLng = searchedPlace ? searchedPlace.lng : 85.3240;
+            const baseLat = searchedPlace ? searchedPlace.lat : 21.1458;
+            const baseLng = searchedPlace ? searchedPlace.lng : 79.0882;
             setRoverLocation({
               lat: baseLat,
               lng: baseLng,
@@ -216,8 +299,8 @@ export default function DashboardPage() {
           { enableHighAccuracy: true, timeout: 5000 }
         );
       } else {
-        const baseLat = searchedPlace ? searchedPlace.lat : 27.7172;
-        const baseLng = searchedPlace ? searchedPlace.lng : 85.3240;
+        const baseLat = searchedPlace ? searchedPlace.lat : 21.1458;
+        const baseLng = searchedPlace ? searchedPlace.lng : 79.0882;
         setRoverLocation({
           lat: baseLat,
           lng: baseLng,
@@ -360,6 +443,65 @@ export default function DashboardPage() {
           onUpdatePointLocation={handleUpdatePointLocation}
         />
       </div>
+
+      {/* Floating On-Screen D-Pad Controller (When Virtual Emulator Mode is active) */}
+      {settings.locationSource === 'emulator' && (
+        <div className="absolute bottom-20 left-4 z-[450] bg-slate-900/95 backdrop-blur-md border border-slate-700 p-3 rounded-2xl shadow-2xl flex flex-col items-center space-y-2 font-sans select-none animate-in fade-in slide-in-from-bottom-3 duration-200">
+          <div className="flex items-center justify-between w-full border-b border-slate-800 pb-1.5 gap-2">
+            <span className="text-[10px] font-bold text-cyan-400 font-mono flex items-center gap-1">
+              <Gamepad2 className="w-3.5 h-3.5" /> EMULATOR JOYSTICK
+            </span>
+            <a
+              href="/emulator"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[9px] text-slate-400 hover:text-white flex items-center gap-0.5 hover:underline"
+            >
+              <span>Studio</span>
+              <ExternalLink className="w-2.5 h-2.5" />
+            </a>
+          </div>
+
+          {/* D-Pad Buttons */}
+          <div className="flex flex-col items-center space-y-1 my-1">
+            <button
+              onClick={() => moveEmulatorStep(0.00003, 0, 0)}
+              className="w-9 h-9 rounded-xl bg-slate-800 hover:bg-cyan-600 text-slate-200 hover:text-white flex items-center justify-center shadow transition active:scale-95 border border-slate-700"
+              title="Move North (Up / W)"
+            >
+              <ArrowUp className="w-4 h-4" />
+            </button>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => moveEmulatorStep(0, -0.00003 * 1.3, 270)}
+                className="w-9 h-9 rounded-xl bg-slate-800 hover:bg-cyan-600 text-slate-200 hover:text-white flex items-center justify-center shadow transition active:scale-95 border border-slate-700"
+                title="Move West (Left / A)"
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </button>
+              <div className="w-4 h-4 rounded-full bg-cyan-500/20 border border-cyan-400/50 animate-pulse" />
+              <button
+                onClick={() => moveEmulatorStep(0, 0.00003 * 1.3, 90)}
+                className="w-9 h-9 rounded-xl bg-slate-800 hover:bg-cyan-600 text-slate-200 hover:text-white flex items-center justify-center shadow transition active:scale-95 border border-slate-700"
+                title="Move East (Right / D)"
+              >
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+            <button
+              onClick={() => moveEmulatorStep(-0.00003, 0, 180)}
+              className="w-9 h-9 rounded-xl bg-slate-800 hover:bg-cyan-600 text-slate-200 hover:text-white flex items-center justify-center shadow transition active:scale-95 border border-slate-700"
+              title="Move South (Down / S)"
+            >
+              <ArrowDown className="w-4 h-4" />
+            </button>
+          </div>
+
+          <span className="text-[9px] text-slate-400 font-mono text-center">
+            Use WASD or Arrow Keys
+          </span>
+        </div>
+      )}
 
       {/* Control Panel */}
       <ControlPanel
