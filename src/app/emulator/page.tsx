@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 
 export default function RoverEmulatorPage() {
-  const [isSurveying, setIsSurveying] = useState(false);
+  const [isSurveying, setIsSurveying] = useState(true);
   const [mqttStatus, setMqttStatus] = useState<'connected' | 'connecting' | 'disconnected' | 'error'>('connecting');
   const [currentPosition, setCurrentPosition] = useState<{
     lat: number;
@@ -53,8 +53,8 @@ export default function RoverEmulatorPage() {
   const watchIdRef = useRef<number | null>(null);
   const autoWalkIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  const brokerUrl = DEFAULT_MQTT_CONFIG.brokerUrl;
-  const topic = DEFAULT_MQTT_CONFIG.topic;
+  const brokerUrl = process.env.NEXT_PUBLIC_MQTT_BROKER || DEFAULT_MQTT_CONFIG.brokerUrl;
+  const topic = process.env.NEXT_PUBLIC_MQTT_TOPIC || DEFAULT_MQTT_CONFIG.topic;
 
   // Initialize MQTT Client on mount
   useEffect(() => {
@@ -212,6 +212,9 @@ export default function RoverEmulatorPage() {
   // Step movement helper (North, South, East, West)
   const moveSimulated = useCallback(
     (dLat: number, dLng: number, heading: number) => {
+      if (!isSurveying) {
+        setIsSurveying(true);
+      }
       setCurrentPosition((prev) => {
         const baseLat = prev ? prev.lat : 27.7172;
         const baseLng = prev ? prev.lng : 85.3240;
@@ -219,9 +222,7 @@ export default function RoverEmulatorPage() {
         const newLng = baseLng + dLng;
         const accuracy = 0.02 + Math.random() * 0.02; // ±0.02m RTK precision
 
-        if (isSurveying) {
-          publishLocation(newLat, newLng, accuracy, 120.0, heading, 1.4);
-        }
+        publishLocation(newLat, newLng, accuracy, 120.0, heading, 1.4);
 
         return {
           lat: newLat,
@@ -229,7 +230,7 @@ export default function RoverEmulatorPage() {
           accuracy,
           altitude: 120.0,
           heading,
-          speed: isSurveying ? 1.4 : 0,
+          speed: 1.4,
           timestamp: Date.now(),
         };
       });

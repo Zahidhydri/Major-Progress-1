@@ -84,20 +84,11 @@ export default function DashboardPage() {
       }
     });
 
-    // Smart Fallback: If hardware MQTT times out, fall back to Device GPS
-    mqttTimeoutRef.current = setTimeout(() => {
-      if (!client.connected && settings.locationSource === 'mqtt') {
-        console.warn('Hardware RTK not connected. Falling back to On-Device Mobile GPS...');
-        setSettings((prev) => ({ ...prev, locationSource: 'device' }));
-      }
-    }, 6000);
-
     client.on('reconnect', () => setMqttStatus('reconnecting'));
     client.on('error', () => setMqttStatus('error'));
     client.on('close', () => setMqttStatus('disconnected'));
 
     return () => {
-      if (mqttTimeoutRef.current) clearTimeout(mqttTimeoutRef.current);
       if (client.connected) client.end(true);
     };
   }, [settings.locationSource, settings.mqttBrokerUrl, settings.mqttTopic]);
