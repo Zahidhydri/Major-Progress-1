@@ -28,6 +28,7 @@ export interface SurveyMetrics {
   perimeterKm: number;
   perimeterFeet: number;
   pointCount: number;
+  centroid?: { lat: number; lng: number };
 }
 
 export type MqttConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error' | 'reconnecting';
@@ -52,27 +53,15 @@ export interface GeocodedPlace {
   lat: number;
   lng: number;
   category?: string;
-  addressDetails?: {
-    city?: string;
-    state?: string;
-    country?: string;
-    road?: string;
-    postcode?: string;
-  };
 }
 
-export interface SurveyProject {
-  id: string;
-  title: string;
-  clientName?: string;
-  locationName?: string;
-  notes?: string;
-  points: CapturedPoint[];
-  metrics: SurveyMetrics | null;
-  createdAt: number;
-  updatedAt: number;
-  surveyorName?: string;
-  surveyorEmail?: string;
+export interface AppSettings {
+  locationSource: LocationSource;
+  autoCaptureEnabled: boolean;
+  autoCaptureDistance: number; // meters threshold
+  mqttBrokerUrl: string;
+  mqttTopic: string;
+  mapStyle: 'osm' | 'street' | 'topo' | 'satellite';
 }
 
 export interface UserProfile {
@@ -84,12 +73,13 @@ export interface UserProfile {
   isAuthenticated: boolean;
 }
 
-export interface AppSettings {
-  locationSource: LocationSource;
-  mqttBrokerUrl: string;
-  mqttTopic: string;
-  geocodingProvider: 'nominatim' | 'mapbox' | 'google';
-  geocodingApiKey: string;
-  firebaseEnabled: boolean;
-  mapStyle: 'osm' | 'street' | 'topo' | 'satellite';
+export interface SurveyProject {
+  id: string;
+  title: string;
+  clientName?: string;
+  locationName?: string;
+  points: CapturedPoint[];
+  metrics: SurveyMetrics | null;
+  createdAt: number;
+  updatedAt: number;
 }

@@ -11,8 +11,10 @@ interface DynamicMapProps {
   autoFollow: boolean;
   onToggleAutoFollow: () => void;
   onSelectPoint?: (point: CapturedPoint) => void;
+  onUpdatePointLocation?: (id: string, lat: number, lng: number) => void;
   searchedPlace?: GeocodedPlace | null;
   mapStyle?: 'osm' | 'street' | 'topo' | 'satellite';
+  centerOnUserTrigger?: number;
 }
 
 // Dynamically import SurveyMap with SSR disabled to prevent window is not defined errors

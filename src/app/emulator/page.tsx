@@ -41,7 +41,7 @@ export default function RoverEmulatorPage() {
   const [packetsSent, setPacketsSent] = useState(0);
   const [lastTransmission, setLastTransmission] = useState<string>('Never');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [simulatedMode, setSimulatedMode] = useState(false);
+  const [simulatedMode, setSimulatedMode] = useState(true);
   const [stepSize, setStepSize] = useState<number>(0.00015); // ~15 meters per step
   const [autoWalk, setAutoWalk] = useState(false);
 

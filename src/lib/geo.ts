@@ -11,25 +11,23 @@ export function calculateSurveyMetrics(points: CapturedPoint[]): SurveyMetrics |
   }
 
   try {
-    // Turf coordinates: [lng, lat]
-    // Closed linear ring: first point must equal last point
     const coords: [number, number][] = points.map((p) => [p.lng, p.lat]);
-    coords.push([points[0].lng, points[0].lat]); // Close the ring
+    coords.push([points[0].lng, points[0].lat]);
 
     const poly = turf.polygon([coords]);
 
-    // Area in square meters
     const areaSqMeters = turf.area(poly);
     const areaHectares = areaSqMeters / 10000;
     const areaAcres = areaSqMeters * 0.000247105;
     const areaSqFeet = areaSqMeters * 10.7639;
 
-    // Perimeter in kilometers -> convert to meters & feet
     const line = turf.polygonToLine(poly);
-    // turf.length returns km by default with units: 'kilometers'
     const perimeterKm = turf.length(line, { units: 'kilometers' });
     const perimeterMeters = perimeterKm * 1000;
     const perimeterFeet = perimeterMeters * 3.28084;
+
+    const center = turf.centroid(poly);
+    const [centroidLng, centroidLat] = center.geometry.coordinates;
 
     return {
       areaSqMeters,
@@ -40,10 +38,27 @@ export function calculateSurveyMetrics(points: CapturedPoint[]): SurveyMetrics |
       perimeterKm,
       perimeterFeet,
       pointCount: points.length,
+      centroid: { lat: centroidLat, lng: centroidLng },
     };
   } catch (error) {
     console.error('Error calculating turf metrics:', error);
     return null;
+  }
+}
+
+/**
+ * Calculate distance between two points in meters using Turf
+ */
+export function calculateDistanceMeters(
+  p1: { lat: number; lng: number },
+  p2: { lat: number; lng: number }
+): number {
+  try {
+    const from = turf.point([p1.lng, p1.lat]);
+    const to = turf.point([p2.lng, p2.lat]);
+    return turf.distance(from, to, { units: 'meters' });
+  } catch (err) {
+    return 0;
   }
 }
 
@@ -70,8 +85,7 @@ export function exportToGeoJSON(points: CapturedPoint[], metrics: SurveyMetrics 
 
   const features: any[] = [];
 
-  // Point features
-  points.forEach((p, idx) => {
+  points.forEach((p) => {
     features.push(
       turf.point([p.lng, p.lat], {
         pointNumber: p.pointNumber,
@@ -82,7 +96,6 @@ export function exportToGeoJSON(points: CapturedPoint[], metrics: SurveyMetrics 
     );
   });
 
-  // Polygon feature if 3 or more points
   if (points.length >= 3 && metrics) {
     const coords: [number, number][] = points.map((p) => [p.lng, p.lat]);
     coords.push([points[0].lng, points[0].lat]);

@@ -7,9 +7,8 @@ import {
   SurveyMetrics,
   MqttConnectionStatus,
   LocationSource,
-  UserProfile,
 } from '@/types/survey';
-import { calculateSurveyMetrics, exportToGeoJSON, formatDMS } from '@/lib/geo';
+import { calculateSurveyMetrics, exportToGeoJSON } from '@/lib/geo';
 import {
   Plus,
   RotateCcw,
@@ -22,12 +21,14 @@ import {
   Trash2,
   Undo2,
   AlertCircle,
-  FolderOpen,
   Settings,
-  User,
   Smartphone,
   Gamepad2,
   Layers,
+  Zap,
+  Edit2,
+  Check,
+  X,
 } from 'lucide-react';
 
 interface ControlPanelProps {
@@ -37,14 +38,14 @@ interface ControlPanelProps {
   onResetSurvey: () => void;
   onDeletePoint: (id: string) => void;
   onUndoLastPoint: () => void;
+  onUpdatePointLocation: (id: string, lat: number, lng: number) => void;
   mqttStatus: MqttConnectionStatus;
   topic: string;
   brokerUrl: string;
   locationSource: LocationSource;
-  user: UserProfile;
   onOpenSettings: () => void;
-  onOpenProjects: () => void;
-  onOpenAuth: () => void;
+  autoCaptureEnabled: boolean;
+  autoCaptureDistance: number;
 }
 
 export default function ControlPanel({
@@ -54,23 +55,23 @@ export default function ControlPanel({
   onResetSurvey,
   onDeletePoint,
   onUndoLastPoint,
+  onUpdatePointLocation,
   mqttStatus,
-  topic,
   locationSource,
-  user,
   onOpenSettings,
-  onOpenProjects,
-  onOpenAuth,
+  autoCaptureEnabled,
+  autoCaptureDistance,
 }: ControlPanelProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [activeTab, setActiveTab] = useState<'metrics' | 'points' | 'telemetry'>('metrics');
+  const [activeTab, setActiveTab] = useState<'metrics' | 'points'>('metrics');
   const [copied, setCopied] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [editingPointId, setEditingPointId] = useState<string | null>(null);
+  const [editLat, setEditLat] = useState<string>('');
+  const [editLng, setEditLng] = useState<string>('');
 
-  // Compute metrics in real-time
   const metrics: SurveyMetrics | null = calculateSurveyMetrics(capturedPoints);
 
-  // Handle Export GeoJSON
   const handleExportGeoJSON = () => {
     const geojson = exportToGeoJSON(capturedPoints, metrics);
     if (!geojson) return;
@@ -93,18 +94,25 @@ export default function ControlPanel({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const statusColor = {
-    connected: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30',
-    connecting: 'text-amber-400 bg-amber-500/10 border-amber-500/30',
-    reconnecting: 'text-amber-400 bg-amber-500/10 border-amber-500/30',
-    disconnected: 'text-slate-400 bg-slate-500/10 border-slate-500/30',
-    error: 'text-rose-400 bg-rose-500/10 border-rose-500/30',
-  }[mqttStatus];
+  const startEditing = (p: CapturedPoint) => {
+    setEditingPointId(p.id);
+    setEditLat(p.lat.toString());
+    setEditLng(p.lng.toString());
+  };
+
+  const saveEdit = (id: string) => {
+    const parsedLat = parseFloat(editLat);
+    const parsedLng = parseFloat(editLng);
+    if (!isNaN(parsedLat) && !isNaN(parsedLng)) {
+      onUpdatePointLocation(id, parsedLat, parsedLng);
+    }
+    setEditingPointId(null);
+  };
 
   const sourceBadge = {
-    mqtt: { label: 'RTK Rover (MQTT)', icon: Radio, color: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/30' },
-    device: { label: 'Phone GPS', icon: Smartphone, color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' },
-    emulator: { label: 'Testing Emulator', icon: Gamepad2, color: 'text-amber-400 bg-amber-500/10 border-amber-500/30' },
+    mqtt: { label: 'RTK Rover', icon: Radio, color: 'text-slate-200 bg-slate-800 border-slate-700' },
+    device: { label: 'Phone GPS', icon: Smartphone, color: 'text-slate-200 bg-slate-800 border-slate-700' },
+    emulator: { label: 'Emulator', icon: Gamepad2, color: 'text-slate-200 bg-slate-800 border-slate-700' },
   }[locationSource];
 
   const SourceIcon = sourceBadge.icon;
@@ -112,11 +120,11 @@ export default function ControlPanel({
   return (
     <aside
       aria-label="Survey control panel"
-      className="z-[400] bg-slate-900/95 backdrop-blur-md border border-slate-800 rounded-2xl shadow-2xl transition-all duration-300 overflow-hidden flex flex-col
+      className="z-[400] bg-slate-900/95 backdrop-blur-md border border-slate-800 rounded-2xl shadow-xl transition-all duration-300 overflow-hidden flex flex-col font-sans
         md:absolute md:top-4 md:right-4 md:w-96 md:max-h-[calc(100vh-2rem)]
-        max-md:fixed max-md:bottom-0 max-md:left-0 max-md:right-0 max-md:rounded-b-none max-md:max-h-[80vh]"
+        max-md:fixed max-md:bottom-14 max-md:left-0 max-md:right-0 max-md:rounded-b-none max-md:max-h-[75vh]"
     >
-      {/* Mobile Handle Bar for Drawer */}
+      {/* Mobile Handle Bar */}
       <div
         onClick={() => setIsCollapsed(!isCollapsed)}
         className="w-full py-1.5 bg-slate-950 flex justify-center cursor-pointer md:hidden select-none"
@@ -125,44 +133,30 @@ export default function ControlPanel({
       </div>
 
       {/* Top Header Bar */}
-      <div className="px-4 py-2.5 bg-slate-950/90 border-b border-slate-800 flex items-center justify-between select-none">
+      <div className="px-4 py-2.5 bg-slate-950 border-b border-slate-800 flex items-center justify-between select-none">
         <div className="flex items-center space-x-2">
           <button
             onClick={onOpenSettings}
-            className={`text-[10px] px-2 py-1 rounded-lg font-mono font-medium border flex items-center gap-1.5 transition ${sourceBadge.color}`}
-            title="Switch Hardware Mode in Settings"
+            className={`text-[10px] px-2.5 py-1 rounded-lg font-mono font-medium border flex items-center gap-1.5 transition ${sourceBadge.color}`}
+            title="Location Settings"
           >
-            <SourceIcon className="w-3 h-3 animate-pulse" />
+            <SourceIcon className="w-3 h-3" />
             <span>{sourceBadge.label}</span>
           </button>
+
+          {autoCaptureEnabled && (
+            <span className="text-[10px] px-2 py-0.5 rounded bg-blue-600/20 text-blue-300 border border-blue-500/30 font-mono flex items-center gap-1">
+              <Zap className="w-3 h-3 text-blue-400" />
+              <span>Auto {autoCaptureDistance}m</span>
+            </span>
+          )}
         </div>
 
-        {/* Quick Toolbar: Projects, User, Settings, Collapse */}
         <div className="flex items-center space-x-1">
-          <button
-            onClick={onOpenProjects}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
-            title="Saved Projects Database"
-          >
-            <FolderOpen className="w-4 h-4" />
-          </button>
-          
-          <button
-            onClick={onOpenAuth}
-            className={`p-1.5 rounded-lg transition ${
-              user.isAuthenticated
-                ? 'text-cyan-400 bg-cyan-500/10 border border-cyan-500/30'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800'
-            }`}
-            title={user.isAuthenticated ? `Signed in as ${user.name}` : 'Sign In'}
-          >
-            <User className="w-4 h-4" />
-          </button>
-
           <button
             onClick={onOpenSettings}
             className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
-            title="Hardware & API Settings"
+            title="Settings"
           >
             <Settings className="w-4 h-4" />
           </button>
@@ -178,69 +172,64 @@ export default function ControlPanel({
 
       {!isCollapsed && (
         <div className="flex flex-col flex-1 overflow-hidden">
-          {/* Live Rover Telemetry Card */}
-          <div className="p-3 bg-slate-950/60 border-b border-slate-800/80">
+          {/* Live Position Stream */}
+          <div className="p-3 bg-slate-950/40 border-b border-slate-800">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5 font-mono">
-                <Activity className="w-3.5 h-3.5" /> Live Position Stream
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5 font-mono">
+                <Activity className="w-3.5 h-3.5" /> GPS Stream
               </span>
               {roverLocation ? (
                 <span className="text-[9px] font-mono text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
-                  GPS FIX ACTIVE
+                  ACTIVE
                 </span>
               ) : (
-                <span className="text-[9px] font-mono text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded animate-pulse">
-                  SEARCHING SIGNAL...
+                <span className="text-[9px] font-mono text-slate-500 bg-slate-800 px-1.5 py-0.5 rounded">
+                  SEARCHING...
                 </span>
               )}
             </div>
 
             {roverLocation ? (
               <div className="grid grid-cols-2 gap-2 font-mono text-xs">
-                <div className="bg-slate-900/80 p-2 rounded-lg border border-slate-800">
-                  <div className="text-[9px] text-slate-400">LATITUDE</div>
-                  <div className="text-white font-semibold text-xs tracking-tight">{roverLocation.lat.toFixed(7)}°</div>
-                  <div className="text-[8px] text-slate-500 truncate">{formatDMS(roverLocation.lat, true)}</div>
+                <div className="bg-slate-900 p-2 rounded-lg border border-slate-800">
+                  <div className="text-[9px] text-slate-500">LATITUDE</div>
+                  <div className="text-white font-medium text-xs tracking-tight">{roverLocation.lat.toFixed(7)}°</div>
                 </div>
 
-                <div className="bg-slate-900/80 p-2 rounded-lg border border-slate-800">
-                  <div className="text-[9px] text-slate-400">LONGITUDE</div>
-                  <div className="text-white font-semibold text-xs tracking-tight">{roverLocation.lng.toFixed(7)}°</div>
-                  <div className="text-[8px] text-slate-500 truncate">{formatDMS(roverLocation.lng, false)}</div>
+                <div className="bg-slate-900 p-2 rounded-lg border border-slate-800">
+                  <div className="text-[9px] text-slate-500">LONGITUDE</div>
+                  <div className="text-white font-medium text-xs tracking-tight">{roverLocation.lng.toFixed(7)}°</div>
                 </div>
 
-                <div className="bg-slate-900/80 p-1.5 px-2 rounded-lg border border-slate-800 flex justify-between items-center">
-                  <span className="text-[9px] text-slate-400">ACCURACY</span>
+                <div className="bg-slate-900 p-1.5 px-2 rounded-lg border border-slate-800 flex justify-between items-center">
+                  <span className="text-[9px] text-slate-500">ACCURACY</span>
                   <span className="text-emerald-400 font-bold text-xs">
                     {roverLocation.accuracy !== undefined ? `±${roverLocation.accuracy.toFixed(2)}m` : 'N/A'}
                   </span>
                 </div>
 
-                <div className="bg-slate-900/80 p-1.5 px-2 rounded-lg border border-slate-800 flex justify-between items-center">
-                  <span className="text-[9px] text-slate-400">LAST SYNC</span>
-                  <span className="text-slate-300 text-[9px]">
+                <div className="bg-slate-900 p-1.5 px-2 rounded-lg border border-slate-800 flex justify-between items-center">
+                  <span className="text-[9px] text-slate-500">LAST PING</span>
+                  <span className="text-slate-400 text-[9px]">
                     {new Date(roverLocation.timestamp).toLocaleTimeString()}
                   </span>
                 </div>
               </div>
             ) : (
-              <div className="p-3 rounded-xl bg-slate-900/60 border border-dashed border-slate-800 text-center">
-                <p className="text-xs text-slate-300 font-medium">Awaiting GPS Location...</p>
-                <p className="text-[10px] text-slate-500 mt-0.5">
-                  Click Settings to choose Phone GPS or Virtual Emulator.
-                </p>
+              <div className="p-3 rounded-xl bg-slate-900/50 border border-dashed border-slate-800 text-center">
+                <p className="text-xs text-slate-400">Awaiting Location Signal...</p>
               </div>
             )}
           </div>
 
-          {/* Capture Actions Bar */}
+          {/* Manual Capture Actions */}
           <div className="p-3 bg-slate-900/90 border-b border-slate-800 space-y-2">
             <button
               onClick={onCapturePoint}
               disabled={!roverLocation}
-              className={`w-full py-2.5 px-4 rounded-xl font-bold text-xs tracking-wide uppercase transition flex items-center justify-center space-x-2 shadow-lg ${
+              className={`w-full py-2.5 px-4 rounded-xl font-bold text-xs uppercase transition flex items-center justify-center space-x-2 shadow ${
                 roverLocation
-                  ? 'bg-cyan-600 hover:bg-cyan-500 active:scale-[0.98] text-white shadow-cyan-600/30'
+                  ? 'bg-slate-100 hover:bg-white text-slate-900 active:scale-[0.98]'
                   : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50'
               }`}
             >
@@ -252,10 +241,10 @@ export default function ControlPanel({
               <button
                 onClick={onUndoLastPoint}
                 disabled={capturedPoints.length === 0}
-                className="py-1.5 px-3 rounded-lg text-xs font-medium text-slate-300 hover:text-white bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center space-x-1.5 transition"
+                className="py-1.5 px-3 rounded-lg text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center space-x-1.5 transition"
               >
                 <Undo2 className="w-3.5 h-3.5" />
-                <span>Undo Point</span>
+                <span>Undo</span>
               </button>
 
               <button
@@ -264,18 +253,18 @@ export default function ControlPanel({
                 className="py-1.5 px-3 rounded-lg text-xs font-medium text-rose-400 hover:text-rose-300 bg-rose-950/30 hover:bg-rose-900/40 border border-rose-900/40 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center space-x-1.5 transition"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
-                <span>Reset Boundary</span>
+                <span>Reset</span>
               </button>
             </div>
           </div>
 
           {/* Tab Bar */}
-          <div className="flex border-b border-slate-800 bg-slate-950/60 text-xs font-medium">
+          <div className="flex border-b border-slate-800 bg-slate-950 text-xs font-medium">
             <button
               onClick={() => setActiveTab('metrics')}
               className={`flex-1 py-2 text-center border-b-2 transition ${
                 activeTab === 'metrics'
-                  ? 'border-cyan-400 text-cyan-400 bg-cyan-950/30'
+                  ? 'border-slate-200 text-white bg-slate-900'
                   : 'border-transparent text-slate-400 hover:text-slate-200'
               }`}
             >
@@ -285,7 +274,7 @@ export default function ControlPanel({
               onClick={() => setActiveTab('points')}
               className={`flex-1 py-2 text-center border-b-2 transition ${
                 activeTab === 'points'
-                  ? 'border-cyan-400 text-cyan-400 bg-cyan-950/30'
+                  ? 'border-slate-200 text-white bg-slate-900'
                   : 'border-transparent text-slate-400 hover:text-slate-200'
               }`}
             >
@@ -293,41 +282,41 @@ export default function ControlPanel({
             </button>
           </div>
 
-          {/* Scrollable Tab Body */}
+          {/* Scrollable Tab Content */}
           <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-[140px] max-h-[220px]">
             {activeTab === 'metrics' && (
               <div className="space-y-3">
                 {metrics ? (
                   <>
-                    <div className="p-3 rounded-xl bg-slate-950/70 border border-cyan-900/40 space-y-2">
-                      <div className="text-[10px] text-cyan-400 font-mono font-bold uppercase tracking-wider">
+                    <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 space-y-2">
+                      <div className="text-[10px] text-slate-400 font-mono font-semibold uppercase">
                         Enclosed Land Area
                       </div>
 
                       <div className="grid grid-cols-2 gap-2 pt-1 font-mono">
-                        <div className="bg-slate-900/90 p-2 rounded-lg border border-slate-800">
-                          <div className="text-[9px] text-slate-400">SQ METERS</div>
+                        <div className="bg-slate-900 p-2 rounded-lg border border-slate-800">
+                          <div className="text-[9px] text-slate-500">SQ METERS</div>
                           <div className="text-sm font-bold text-white">
-                            {metrics.areaSqMeters.toLocaleString(undefined, { maximumFractionDigits: 2 })} <span className="text-[10px] text-cyan-400">m²</span>
+                            {metrics.areaSqMeters.toLocaleString(undefined, { maximumFractionDigits: 2 })} <span className="text-[10px] text-slate-400">m²</span>
                           </div>
                         </div>
 
-                        <div className="bg-slate-900/90 p-2 rounded-lg border border-slate-800">
-                          <div className="text-[9px] text-slate-400">HECTARES</div>
+                        <div className="bg-slate-900 p-2 rounded-lg border border-slate-800">
+                          <div className="text-[9px] text-slate-500">HECTARES</div>
                           <div className="text-sm font-bold text-emerald-400">
-                            {metrics.areaHectares.toFixed(4)} <span className="text-[10px] text-slate-300">ha</span>
+                            {metrics.areaHectares.toFixed(4)} <span className="text-[10px] text-slate-400">ha</span>
                           </div>
                         </div>
 
-                        <div className="bg-slate-900/90 p-2 rounded-lg border border-slate-800">
-                          <div className="text-[9px] text-slate-400">ACRES</div>
+                        <div className="bg-slate-900 p-2 rounded-lg border border-slate-800">
+                          <div className="text-[9px] text-slate-500">ACRES</div>
                           <div className="text-xs font-bold text-amber-300">
-                            {metrics.areaAcres.toFixed(4)} <span className="text-[10px] text-slate-300">ac</span>
+                            {metrics.areaAcres.toFixed(4)} <span className="text-[10px] text-slate-400">ac</span>
                           </div>
                         </div>
 
-                        <div className="bg-slate-900/90 p-2 rounded-lg border border-slate-800">
-                          <div className="text-[9px] text-slate-400">SQ FEET</div>
+                        <div className="bg-slate-900 p-2 rounded-lg border border-slate-800">
+                          <div className="text-[9px] text-slate-500">SQ FEET</div>
                           <div className="text-xs font-bold text-slate-200">
                             {metrics.areaSqFeet.toLocaleString(undefined, { maximumFractionDigits: 1 })} <span className="text-[10px] text-slate-400">ft²</span>
                           </div>
@@ -336,16 +325,16 @@ export default function ControlPanel({
                     </div>
 
                     <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1.5 font-mono">
-                      <div className="text-[10px] text-slate-400 uppercase tracking-wider">
+                      <div className="text-[10px] text-slate-500 uppercase">
                         Perimeter Boundary
                       </div>
                       <div className="grid grid-cols-2 gap-2">
-                        <div className="bg-slate-900/90 p-1.5 px-2 rounded-lg border border-slate-800 text-xs">
-                          <span className="text-slate-400 text-[9px] mr-1">METERS:</span>
-                          <span className="font-bold text-cyan-300">{metrics.perimeterMeters.toFixed(2)} m</span>
+                        <div className="bg-slate-900 p-1.5 px-2 rounded-lg border border-slate-800 text-xs">
+                          <span className="text-slate-500 text-[9px] mr-1">METERS:</span>
+                          <span className="font-bold text-slate-200">{metrics.perimeterMeters.toFixed(2)} m</span>
                         </div>
-                        <div className="bg-slate-900/90 p-1.5 px-2 rounded-lg border border-slate-800 text-xs">
-                          <span className="text-slate-400 text-[9px] mr-1">FEET:</span>
+                        <div className="bg-slate-900 p-1.5 px-2 rounded-lg border border-slate-800 text-xs">
+                          <span className="text-slate-500 text-[9px] mr-1">FEET:</span>
                           <span className="font-bold text-slate-300">{metrics.perimeterFeet.toFixed(1)} ft</span>
                         </div>
                       </div>
@@ -353,8 +342,8 @@ export default function ControlPanel({
                   </>
                 ) : (
                   <div className="py-6 px-4 text-center rounded-xl bg-slate-950/40 border border-dashed border-slate-800">
-                    <Layers className="w-6 h-6 text-slate-600 mx-auto mb-1.5" />
-                    <p className="text-xs font-medium text-slate-300">
+                    <Layers className="w-5 h-5 text-slate-600 mx-auto mb-1" />
+                    <p className="text-xs font-medium text-slate-400">
                       {capturedPoints.length === 0
                         ? 'No Boundary Points Captured'
                         : capturedPoints.length < 3
@@ -372,33 +361,83 @@ export default function ControlPanel({
                   capturedPoints.map((point) => (
                     <div
                       key={point.id}
-                      className="p-2 rounded-lg bg-slate-950/70 border border-slate-800 flex items-center justify-between font-mono text-xs hover:border-slate-700 transition"
+                      className="p-2 rounded-lg bg-slate-950/70 border border-slate-800 flex flex-col space-y-1 font-mono text-xs hover:border-slate-700 transition"
                     >
-                      <div className="flex items-center space-x-2">
-                        <span className="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 flex items-center justify-center font-bold text-[10px]">
-                          {point.pointNumber}
-                        </span>
-                        <div>
-                          <div className="text-slate-100 text-[11px]">
-                            {point.lat.toFixed(6)}°, {point.lng.toFixed(6)}°
+                      {editingPointId === point.id ? (
+                        <div className="space-y-2 p-1">
+                          <div className="text-[10px] text-slate-400 font-bold">Edit Point #{point.pointNumber} Coordinates</div>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <div>
+                              <span className="text-[9px] text-slate-500">LAT:</span>
+                              <input
+                                type="text"
+                                value={editLat}
+                                onChange={(e) => setEditLat(e.target.value)}
+                                className="w-full px-2 py-1 bg-slate-900 border border-slate-700 rounded text-slate-100 text-xs"
+                              />
+                            </div>
+                            <div>
+                              <span className="text-[9px] text-slate-500">LNG:</span>
+                              <input
+                                type="text"
+                                value={editLng}
+                                onChange={(e) => setEditLng(e.target.value)}
+                                className="w-full px-2 py-1 bg-slate-900 border border-slate-700 rounded text-slate-100 text-xs"
+                              />
+                            </div>
                           </div>
-                          <div className="text-[9px] text-slate-500">
-                            Acc: ±{point.accuracy?.toFixed(1) || 'N/A'}m • {new Date(point.timestamp).toLocaleTimeString()}
+                          <div className="flex justify-end space-x-1 pt-1">
+                            <button
+                              onClick={() => setEditingPointId(null)}
+                              className="px-2 py-1 text-[10px] bg-slate-800 text-slate-400 rounded hover:text-white"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={() => saveEdit(point.id)}
+                              className="px-2 py-1 text-[10px] bg-blue-600 text-white rounded font-bold"
+                            >
+                              Save
+                            </button>
                           </div>
                         </div>
-                      </div>
+                      ) : (
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <span className="w-5 h-5 rounded-full bg-slate-800 text-slate-200 border border-slate-700 flex items-center justify-center font-bold text-[10px]">
+                              {point.pointNumber}
+                            </span>
+                            <div>
+                              <div className="text-slate-200 text-[11px]">
+                                {point.lat.toFixed(6)}°, {point.lng.toFixed(6)}°
+                              </div>
+                            </div>
+                          </div>
 
-                      <button
-                        onClick={() => onDeletePoint(point.id)}
-                        className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-950/30 transition"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                          <div className="flex items-center space-x-1">
+                            <button
+                              onClick={() => startEditing(point)}
+                              className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition"
+                              title="Manually edit lat/lng"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+
+                            <button
+                              onClick={() => onDeletePoint(point.id)}
+                              className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-950/30 transition"
+                              title="Delete point"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))
                 ) : (
                   <div className="py-6 text-center text-xs text-slate-500">
-                    No points captured yet.
+                    No points recorded.
                   </div>
                 )}
               </div>
@@ -406,14 +445,14 @@ export default function ControlPanel({
           </div>
 
           {/* Footer Actions */}
-          <div className="p-3 bg-slate-950/90 border-t border-slate-800 flex items-center justify-between">
+          <div className="p-3 bg-slate-950 border-t border-slate-800 flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <button
                 onClick={handleExportGeoJSON}
                 disabled={capturedPoints.length === 0}
                 className="px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center space-x-1.5 transition"
               >
-                <Download className="w-3 h-3 text-cyan-400" />
+                <Download className="w-3 h-3" />
                 <span>GeoJSON</span>
               </button>
 
@@ -422,31 +461,24 @@ export default function ControlPanel({
                 disabled={capturedPoints.length === 0}
                 className="px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center space-x-1.5 transition"
               >
-                <Copy className="w-3 h-3 text-cyan-400" />
+                <Copy className="w-3 h-3" />
                 <span>{copied ? 'Copied!' : 'Copy'}</span>
               </button>
             </div>
-
-            <button
-              onClick={onOpenProjects}
-              className="px-3 py-1.5 bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/30 rounded-lg text-xs font-medium transition"
-            >
-              Projects DB
-            </button>
           </div>
         </div>
       )}
 
-      {/* Confirmation Modal for Reset Survey */}
+      {/* Reset Confirmation Modal */}
       {showResetConfirm && (
         <div className="fixed inset-0 z-[500] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl p-5 max-w-sm w-full shadow-2xl space-y-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 max-w-sm w-full shadow-xl space-y-4">
             <div className="flex items-center space-x-3 text-rose-400">
               <AlertCircle className="w-6 h-6 flex-shrink-0" />
               <h2 className="text-sm font-bold text-white">Reset Survey Data?</h2>
             </div>
             <p className="text-xs text-slate-300 leading-relaxed">
-              This will erase all <strong className="text-cyan-400">{capturedPoints.length} captured boundary points</strong> and clear the calculated boundary polygon.
+              This will erase all <strong className="text-slate-100">{capturedPoints.length} captured boundary points</strong>.
             </p>
             <div className="flex justify-end space-x-2 pt-2">
               <button
@@ -462,7 +494,7 @@ export default function ControlPanel({
                 }}
                 className="px-4 py-1.5 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white transition"
               >
-                Yes, Reset All
+                Yes, Reset
               </button>
             </div>
           </div>
