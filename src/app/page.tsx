@@ -102,7 +102,9 @@ export default function DashboardPage() {
     };
   }, [settings.locationSource, settings.mqttBrokerUrl, settings.mqttTopic]);
 
-  // 2. Direct Mobile Device GPS Tracking Mode
+  const lastCaptureTimeRef = useRef<number>(0);
+
+  // 2. Direct Mobile Device GPS Tracking Mode (With Live MQTT Broadcast to Officer Laptop)
   useEffect(() => {
     if (settings.locationSource === 'device') {
       if (!('geolocation' in navigator)) {
@@ -110,10 +112,31 @@ export default function DashboardPage() {
         return;
       }
 
-      setMqttStatus('connected');
+      setMqttStatus('connecting');
+
+      // Connect MQTT for broadcasting live phone GPS to officer's laptop
+      const clientId = `${DEFAULT_MQTT_CONFIG.clientIdPrefix}phone_${Math.random().toString(16).substring(2, 8)}`;
+      const client = mqtt.connect(settings.mqttBrokerUrl, {
+        clientId,
+        clean: true,
+        connectTimeout: 6000,
+        reconnectPeriod: 3000,
+      });
+
+      clientRef.current = client;
+
+      client.on('connect', () => {
+        setMqttStatus('connected');
+      });
 
       const successHandler = (pos: GeolocationPosition) => {
-        setRoverLocation({
+        // Anti-Jumping Guard: Discard extremely noisy GPS fixes (> 25m accuracy spike)
+        if (pos.coords.accuracy > 25) {
+          console.warn(`Noisy GPS fix discarded (±${pos.coords.accuracy.toFixed(1)}m > 25m threshold)`);
+          return;
+        }
+
+        const locationData: GpsLocation = {
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
           accuracy: pos.coords.accuracy,
@@ -121,7 +144,27 @@ export default function DashboardPage() {
           heading: pos.coords.heading,
           speed: pos.coords.speed,
           timestamp: pos.timestamp,
-        });
+        };
+
+        setRoverLocation(locationData);
+
+        // Broadcast to MQTT so Officer on Laptop sees field movement live!
+        if (client.connected) {
+          client.publish(
+            settings.mqttTopic,
+            JSON.stringify({
+              lat: Number(locationData.lat.toFixed(7)),
+              lng: Number(locationData.lng.toFixed(7)),
+              accuracy: Number((locationData.accuracy || 0.05).toFixed(2)),
+              altitude: locationData.altitude || 120.0,
+              heading: locationData.heading || 0,
+              speed: locationData.speed || 0,
+              timestamp: locationData.timestamp,
+              deviceId: 'MOBILE-FIELD-PHONE',
+            }),
+            { qos: 0 }
+          );
+        }
       };
 
       const errorHandler = (err: GeolocationPositionError) => {
@@ -141,9 +184,10 @@ export default function DashboardPage() {
         if (deviceWatchIdRef.current !== null) {
           navigator.geolocation.clearWatch(deviceWatchIdRef.current);
         }
+        if (client.connected) client.end(true);
       };
     }
-  }, [settings.locationSource]);
+  }, [settings.locationSource, settings.mqttBrokerUrl, settings.mqttTopic]);
 
   // 3. Virtual Device Emulator Mode (Starts at User's Real Location - No Forced Circle Loop)
   useEffect(() => {
@@ -214,12 +258,25 @@ export default function DashboardPage() {
     });
   }, [roverLocation]);
 
-  // Auto Point Capture System
+  // Auto Point Capture System (With Anti-Jumping & Teleport Filters)
   useEffect(() => {
     if (!settings.autoCaptureEnabled || !roverLocation) return;
 
+    // Filter 1: Discard noisy GPS position fixes (> 15m inaccuracy)
+    if (roverLocation.accuracy && roverLocation.accuracy > 15) {
+      console.warn(`Auto-Capture ignored noisy GPS point (accuracy ±${roverLocation.accuracy.toFixed(1)}m > 15m)`);
+      return;
+    }
+
+    const now = Date.now();
+    // Filter 2: Enforce minimum 1.5-second cooldown gap between captures
+    if (now - lastCaptureTimeRef.current < 1500) {
+      return;
+    }
+
     if (capturedPoints.length === 0) {
       handleCapturePoint();
+      lastCaptureTimeRef.current = now;
       return;
     }
 
@@ -229,8 +286,15 @@ export default function DashboardPage() {
       { lat: roverLocation.lat, lng: roverLocation.lng }
     );
 
+    // Filter 3: Discard single-frame teleport spikes (> 50 meters jump)
+    if (dist > 50) {
+      console.warn(`Auto-Capture ignored GPS teleport spike (${dist.toFixed(1)}m jump)`);
+      return;
+    }
+
     if (dist >= settings.autoCaptureDistance) {
       handleCapturePoint();
+      lastCaptureTimeRef.current = now;
     }
   }, [roverLocation, capturedPoints, settings.autoCaptureEnabled, settings.autoCaptureDistance, handleCapturePoint]);
 
