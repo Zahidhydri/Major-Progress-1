@@ -145,44 +145,54 @@ export default function DashboardPage() {
     }
   }, [settings.locationSource]);
 
-  // 3. Virtual Device Emulator Mode (Isolates smooth simulation path)
+  // 3. Virtual Device Emulator Mode (Starts at User's Real Location - No Forced Circle Loop)
   useEffect(() => {
     if (settings.locationSource === 'emulator') {
       setMqttStatus('connected');
-      let baseLat = searchedPlace ? searchedPlace.lat : 27.7172;
-      let baseLng = searchedPlace ? searchedPlace.lng : 85.3240;
-      let angle = 0;
 
-      setRoverLocation({
-        lat: baseLat,
-        lng: baseLng,
-        accuracy: 0.03,
-        altitude: 1350.5,
-        heading: 45,
-        speed: 1.2,
-        timestamp: Date.now(),
-      });
-
-      emulatorIntervalRef.current = setInterval(() => {
-        angle += 0.12;
-        const radius = 0.00025;
-        const noisyLat = baseLat + Math.sin(angle) * radius;
-        const noisyLng = baseLng + Math.cos(angle) * radius;
-
+      // Fetch user's real physical coordinates
+      if ('geolocation' in navigator) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            setRoverLocation({
+              lat: pos.coords.latitude,
+              lng: pos.coords.longitude,
+              accuracy: 0.03,
+              altitude: pos.coords.altitude || 120.0,
+              heading: 0,
+              speed: 0,
+              timestamp: Date.now(),
+            });
+          },
+          (err) => {
+            console.warn('Emulator real location fallback:', err.message);
+            const baseLat = searchedPlace ? searchedPlace.lat : 27.7172;
+            const baseLng = searchedPlace ? searchedPlace.lng : 85.3240;
+            setRoverLocation({
+              lat: baseLat,
+              lng: baseLng,
+              accuracy: 0.03,
+              altitude: 120.0,
+              heading: 0,
+              speed: 0,
+              timestamp: Date.now(),
+            });
+          },
+          { enableHighAccuracy: true, timeout: 5000 }
+        );
+      } else {
+        const baseLat = searchedPlace ? searchedPlace.lat : 27.7172;
+        const baseLng = searchedPlace ? searchedPlace.lng : 85.3240;
         setRoverLocation({
-          lat: noisyLat,
-          lng: noisyLng,
+          lat: baseLat,
+          lng: baseLng,
           accuracy: 0.03,
-          altitude: 1350 + Math.sin(angle) * 2,
-          heading: Math.floor((angle * 180 / Math.PI) % 360),
-          speed: 1.1,
+          altitude: 120.0,
+          heading: 0,
+          speed: 0,
           timestamp: Date.now(),
         });
-      }, 1500);
-
-      return () => {
-        if (emulatorIntervalRef.current) clearInterval(emulatorIntervalRef.current);
-      };
+      }
     }
   }, [settings.locationSource, searchedPlace]);
 
