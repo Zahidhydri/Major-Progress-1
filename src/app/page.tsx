@@ -256,6 +256,21 @@ export default function DashboardPage() {
     );
   }, []);
 
+  // Cycle map style (OSM -> Street -> Topo -> Satellite)
+  const handleCycleMapStyle = useCallback(() => {
+    setSettings((prev) => ({
+      ...prev,
+      mapStyle:
+        prev.mapStyle === 'osm'
+          ? 'street'
+          : prev.mapStyle === 'street'
+          ? 'topo'
+          : prev.mapStyle === 'topo'
+          ? 'satellite'
+          : 'osm',
+    }));
+  }, []);
+
   return (
     <main className="relative w-screen h-screen overflow-hidden bg-slate-950 font-sans">
       {/* Top Floating Header & Search Bar */}
@@ -321,6 +336,8 @@ export default function DashboardPage() {
         }
         capturedCount={capturedPoints.length}
         isRoverActive={Boolean(roverLocation)}
+        mapStyle={settings.mapStyle}
+        onCycleMapStyle={handleCycleMapStyle}
       />
 
       {/* Settings Modal */}

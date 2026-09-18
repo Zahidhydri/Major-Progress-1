@@ -458,8 +458,8 @@ export default function SurveyMap({
         ))}
       </MapContainer>
 
-      {/* Floating Controls (Desktop View - Bottom Left) */}
-      <div className="absolute bottom-6 left-6 z-[400] hidden md:flex items-center space-x-2 font-sans">
+      {/* Floating Map Controls (Mobile Top-Left below search, Desktop Bottom-Left) */}
+      <div className="absolute top-16 left-4 z-[450] md:bottom-6 md:top-auto md:left-6 flex items-center space-x-2 font-sans">
         <div className="bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-xl p-1.5 flex items-center space-x-1.5 shadow-xl">
           <button
             onClick={() => setLocalCenterTrigger((prev) => prev + 1)}
