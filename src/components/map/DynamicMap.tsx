@@ -3,7 +3,7 @@
 import dynamic from 'next/dynamic';
 import React from 'react';
 import { Loader2 } from 'lucide-react';
-import { CapturedPoint, GpsLocation } from '@/types/survey';
+import { CapturedPoint, GpsLocation, GeocodedPlace } from '@/types/survey';
 
 interface DynamicMapProps {
   roverLocation: GpsLocation | null;
@@ -11,6 +11,8 @@ interface DynamicMapProps {
   autoFollow: boolean;
   onToggleAutoFollow: () => void;
   onSelectPoint?: (point: CapturedPoint) => void;
+  searchedPlace?: GeocodedPlace | null;
+  mapStyle?: 'osm' | 'street' | 'topo' | 'satellite';
 }
 
 // Dynamically import SurveyMap with SSR disabled to prevent window is not defined errors
@@ -27,7 +29,7 @@ const SurveyMap = dynamic(() => import('./SurveyMap'), {
       <p className="text-sm font-mono font-medium text-slate-300 tracking-wider">
         INITIALIZING GIS MAP ENGINE...
       </p>
-      <p className="text-xs text-slate-500 mt-1">Loading Leaflet WebGL Vector Layer</p>
+      <p className="text-xs text-slate-500 mt-1">Loading Leaflet Vector Layer</p>
     </div>
   ),
 });

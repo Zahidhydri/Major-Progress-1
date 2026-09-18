@@ -12,8 +12,8 @@ import {
   useMap,
 } from 'react-leaflet';
 import L from 'leaflet';
-import { CapturedPoint, GpsLocation } from '@/types/survey';
-import { Layers, Navigation, ZoomIn, Maximize2 } from 'lucide-react';
+import { CapturedPoint, GpsLocation, GeocodedPlace } from '@/types/survey';
+import { Layers, Navigation } from 'lucide-react';
 
 interface SurveyMapProps {
   roverLocation: GpsLocation | null;
@@ -21,17 +21,19 @@ interface SurveyMapProps {
   autoFollow: boolean;
   onToggleAutoFollow: () => void;
   onSelectPoint?: (point: CapturedPoint) => void;
+  searchedPlace?: GeocodedPlace | null;
+  mapStyle?: 'osm' | 'street' | 'topo' | 'satellite';
 }
 
-// Controller component to auto-pan or fit bounds
+// Controller component to auto-pan or fit bounds or fly to searched place
 function MapController({
   roverLocation,
   autoFollow,
-  capturedPoints,
+  searchedPlace,
 }: {
   roverLocation: GpsLocation | null;
   autoFollow: boolean;
-  capturedPoints: CapturedPoint[];
+  searchedPlace?: GeocodedPlace | null;
 }) {
   const map = useMap();
   const hasCenteredInitial = useRef(false);
@@ -51,6 +53,13 @@ function MapController({
     }
   }, [roverLocation, autoFollow, map]);
 
+  // Fly to searched place
+  useEffect(() => {
+    if (searchedPlace) {
+      map.flyTo([searchedPlace.lat, searchedPlace.lng], 17, { animate: true, duration: 1.2 });
+    }
+  }, [searchedPlace, map]);
+
   return null;
 }
 
@@ -60,25 +69,38 @@ export default function SurveyMap({
   autoFollow,
   onToggleAutoFollow,
   onSelectPoint,
+  searchedPlace,
+  mapStyle = 'osm',
 }: SurveyMapProps) {
-  const [mapType, setMapType] = useState<'dark' | 'osm' | 'satellite'>('dark');
+  const [mapType, setMapType] = useState<'osm' | 'street' | 'topo' | 'satellite'>(mapStyle);
   const [showAccuracyCircle, setShowAccuracyCircle] = useState(true);
 
-  // Default fallback center (Kathmandu / Greenwich / or general coordinate)
+  useEffect(() => {
+    setMapType(mapStyle);
+  }, [mapStyle]);
+
+  // Default fallback center
   const defaultCenter: [number, number] = roverLocation
     ? [roverLocation.lat, roverLocation.lng]
+    : searchedPlace
+    ? [searchedPlace.lat, searchedPlace.lng]
     : [27.7172, 85.3240];
 
-  // Tile layers (100% Free & Open - No API Key Required)
+  // 100% Free Public GIS Tile Layers (Zero API Keys required)
   const tileLayers = {
-    dark: {
-      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
-      attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
-      maxZoom: 19,
-    },
     osm: {
       url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      maxZoom: 19,
+    },
+    street: {
+      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+      attribution: 'Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, NRCAN, Esri Japan, METI, Esri China (Hong Kong), Esri (Thailand), TomTom',
+      maxZoom: 19,
+    },
+    topo: {
+      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+      attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ, TomTom, Intermap, iPC, USGS, FAO, NPS, NRCAN, GeoBase, IGN, Kadaster NL, Ordnance Survey, Esri Japan, METI, Esri China (Hong Kong), swisstopo, MapmyIndia, &copy; OpenStreetMap contributors',
       maxZoom: 19,
     },
     satellite: {
@@ -107,6 +129,21 @@ export default function SurveyMap({
     });
   }, []);
 
+  // Custom Searched Place Icon
+  const searchPlaceIcon = useMemo(() => {
+    return L.divIcon({
+      className: 'custom-search-marker',
+      html: `
+        <div style="width: 32px; height: 32px; background: #8b5cf6; border: 2.5px solid #ffffff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 16px; box-shadow: 0 0 14px rgba(139, 92, 246, 0.9);">
+          📍
+        </div>
+      `,
+      iconSize: [32, 32],
+      iconAnchor: [16, 16],
+      popupAnchor: [0, -16],
+    });
+  }, []);
+
   // Custom Boundary Point Icon generator
   const createPointIcon = (pointNum: number) => {
     return L.divIcon({
@@ -118,7 +155,6 @@ export default function SurveyMap({
     });
   };
 
-  // Coordinates array for Polygon & Polyline
   const polygonCoords = useMemo<[number, number][]>(() => {
     return capturedPoints.map((p) => [p.lat, p.lng]);
   }, [capturedPoints]);
@@ -132,19 +168,29 @@ export default function SurveyMap({
         className="w-full h-full z-0"
         zoomControl={false}
       >
+        {/* Base Map Tile Layer */}
         <TileLayer
+          key={mapType}
           attribution={tileLayers[mapType].attribution}
           url={tileLayers[mapType].url}
           maxZoom={tileLayers[mapType].maxZoom}
         />
 
+        {/* Overlay Street & Place Name Labels Layer on Satellite Mode */}
+        {mapType === 'satellite' && (
+          <TileLayer
+            url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
+            maxZoom={19}
+          />
+        )}
+
         <MapController
           roverLocation={roverLocation}
           autoFollow={autoFollow}
-          capturedPoints={capturedPoints}
+          searchedPlace={searchedPlace}
         />
 
-        {/* Accuracy radius ring around rover */}
+        {/* Accuracy radius ring */}
         {roverLocation && showAccuracyCircle && roverLocation.accuracy && (
           <Circle
             center={[roverLocation.lat, roverLocation.lng]}
@@ -167,10 +213,10 @@ export default function SurveyMap({
             zIndexOffset={1000}
           >
             <Popup className="custom-popup">
-              <div className="p-2 text-xs font-mono text-slate-800 dark:text-slate-100 min-w-[190px]">
+              <div className="p-2 text-xs font-mono text-slate-100 min-w-[190px]">
                 <div className="font-bold text-amber-500 flex items-center justify-between border-b pb-1 mb-1.5 border-slate-700">
-                  <span>📡 LIVE ROVER</span>
-                  <span className="text-[10px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded border border-amber-500/30">ONLINE</span>
+                  <span>📡 LIVE POSITION</span>
+                  <span className="text-[10px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded border border-amber-500/30">ACTIVE</span>
                 </div>
                 <div className="space-y-1">
                   <div className="flex justify-between">
@@ -187,12 +233,6 @@ export default function SurveyMap({
                       <span className="text-emerald-400 font-semibold">±{roverLocation.accuracy.toFixed(2)} m</span>
                     </div>
                   )}
-                  {roverLocation.altitude !== null && roverLocation.altitude !== undefined && (
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Elevation:</span>
-                      <span>{roverLocation.altitude.toFixed(1)} m</span>
-                    </div>
-                  )}
                   <div className="flex justify-between pt-1 border-t border-slate-700/60 text-[10px] text-slate-400">
                     <span>Last Ping:</span>
                     <span>{new Date(roverLocation.timestamp).toLocaleTimeString()}</span>
@@ -203,7 +243,23 @@ export default function SurveyMap({
           </Marker>
         )}
 
-        {/* Active survey guide line from last captured point to current rover */}
+        {/* Searched Place Marker */}
+        {searchedPlace && (
+          <Marker
+            position={[searchedPlace.lat, searchedPlace.lng]}
+            icon={searchPlaceIcon}
+            zIndexOffset={900}
+          >
+            <Popup>
+              <div className="p-1.5 text-xs font-mono text-slate-900">
+                <div className="font-bold text-purple-700">{searchedPlace.shortName}</div>
+                <div className="text-[10px] text-slate-600">{searchedPlace.displayName}</div>
+              </div>
+            </Popup>
+          </Marker>
+        )}
+
+        {/* Boundary guide line from last captured point to current rover */}
         {roverLocation && capturedPoints.length > 0 && (
           <Polyline
             positions={[
@@ -219,7 +275,7 @@ export default function SurveyMap({
           />
         )}
 
-        {/* Captured Survey Polygon (if 3 or more points) */}
+        {/* Polygon for 3+ points */}
         {capturedPoints.length >= 3 && (
           <Polygon
             positions={polygonCoords}
@@ -233,13 +289,13 @@ export default function SurveyMap({
             <Popup>
               <div className="text-xs font-mono p-1">
                 <div className="font-bold text-cyan-400">Enclosed Survey Boundary</div>
-                <div>{capturedPoints.length} vertices captured</div>
+                <div>{capturedPoints.length} boundary vertices</div>
               </div>
             </Popup>
           </Polygon>
         )}
 
-        {/* Polyline connecting points if only 2 points captured */}
+        {/* Polyline for 2 points */}
         {capturedPoints.length === 2 && (
           <Polyline
             positions={polygonCoords}
@@ -251,7 +307,7 @@ export default function SurveyMap({
           />
         )}
 
-        {/* Boundary Point Markers */}
+        {/* Points Markers */}
         {capturedPoints.map((point) => (
           <Marker
             key={point.id}
@@ -271,9 +327,6 @@ export default function SurveyMap({
                 {point.accuracy !== undefined && (
                   <div className="text-emerald-400">Acc: ±{point.accuracy.toFixed(2)} m</div>
                 )}
-                <div className="text-[10px] text-slate-400 mt-1">
-                  {new Date(point.timestamp).toLocaleTimeString()}
-                </div>
               </div>
             </Popup>
           </Marker>
@@ -282,42 +335,49 @@ export default function SurveyMap({
 
       {/* Floating Map Control Bar (Bottom Left) */}
       <div className="absolute bottom-6 left-6 z-[400] flex items-center space-x-2">
-        <div className="glass-panel rounded-xl p-1.5 flex items-center space-x-1 shadow-2xl">
-          {/* Map Layer Switcher */}
+        <div className="bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-xl p-1.5 flex items-center space-x-1 shadow-2xl">
           <button
-            onClick={() => setMapType(mapType === 'dark' ? 'satellite' : mapType === 'satellite' ? 'osm' : 'dark')}
-            title="Switch Map Layer (Dark / Satellite / OSM)"
+            onClick={() =>
+              setMapType(
+                mapType === 'osm'
+                  ? 'street'
+                  : mapType === 'street'
+                  ? 'topo'
+                  : mapType === 'topo'
+                  ? 'satellite'
+                  : 'osm'
+              )
+            }
+            title="Switch Map Layer (OSM / World Street / Topo / Satellite with Place Names)"
             className="flex items-center space-x-1 px-3 py-1.5 text-xs font-medium rounded-lg text-slate-200 hover:text-white bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 transition"
           >
             <Layers className="w-3.5 h-3.5 text-cyan-400" />
             <span className="capitalize">{mapType}</span>
           </button>
 
-          {/* Auto Follow Rover Toggle */}
           <button
             onClick={onToggleAutoFollow}
             title={autoFollow ? 'Auto-follow Rover (Enabled)' : 'Auto-follow Rover (Disabled)'}
             className={`flex items-center space-x-1 px-3 py-1.5 text-xs font-medium rounded-lg border transition ${
               autoFollow
-                ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-glow-rover'
-                : 'bg-slate-800/80 text-slate-400 hover:text-white border-slate-700 hover:bg-slate-700/80'
+                ? 'bg-amber-500/20 text-amber-300 border-amber-500/50'
+                : 'bg-slate-800/80 text-slate-400 hover:text-white border-slate-700'
             }`}
           >
             <Navigation className={`w-3.5 h-3.5 ${autoFollow ? 'text-amber-400 animate-pulse' : ''}`} />
             <span>{autoFollow ? 'Following' : 'Free Cam'}</span>
           </button>
 
-          {/* Toggle Accuracy Ring */}
           <button
             onClick={() => setShowAccuracyCircle(!showAccuracyCircle)}
-            title="Toggle GPS Accuracy Circle"
+            title="Toggle Accuracy Circle"
             className={`px-2.5 py-1.5 text-xs font-medium rounded-lg border transition ${
               showAccuracyCircle
                 ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50'
                 : 'bg-slate-800/80 text-slate-400 border-slate-700'
             }`}
           >
-            ± Accuracy Ring
+            ± Accuracy
           </button>
         </div>
       </div>

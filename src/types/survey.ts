@@ -16,6 +16,7 @@ export interface CapturedPoint {
   accuracy?: number;
   timestamp: number;
   elevation?: number | null;
+  address?: string;
 }
 
 export interface SurveyMetrics {
@@ -31,6 +32,8 @@ export interface SurveyMetrics {
 
 export type MqttConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error' | 'reconnecting';
 
+export type LocationSource = 'mqtt' | 'device' | 'emulator';
+
 export interface TelemetryPayload {
   lat: number;
   lng: number;
@@ -40,4 +43,53 @@ export interface TelemetryPayload {
   speed?: number | null;
   timestamp: number;
   deviceId?: string;
+}
+
+export interface GeocodedPlace {
+  placeId: string;
+  displayName: string;
+  shortName: string;
+  lat: number;
+  lng: number;
+  category?: string;
+  addressDetails?: {
+    city?: string;
+    state?: string;
+    country?: string;
+    road?: string;
+    postcode?: string;
+  };
+}
+
+export interface SurveyProject {
+  id: string;
+  title: string;
+  clientName?: string;
+  locationName?: string;
+  notes?: string;
+  points: CapturedPoint[];
+  metrics: SurveyMetrics | null;
+  createdAt: number;
+  updatedAt: number;
+  surveyorName?: string;
+  surveyorEmail?: string;
+}
+
+export interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  role: 'lead_surveyor' | 'field_technician' | 'gis_analyst';
+  organization?: string;
+  isAuthenticated: boolean;
+}
+
+export interface AppSettings {
+  locationSource: LocationSource;
+  mqttBrokerUrl: string;
+  mqttTopic: string;
+  geocodingProvider: 'nominatim' | 'mapbox' | 'google';
+  geocodingApiKey: string;
+  firebaseEnabled: boolean;
+  mapStyle: 'osm' | 'street' | 'topo' | 'satellite';
 }
