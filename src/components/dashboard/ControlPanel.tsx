@@ -222,25 +222,29 @@ export default function ControlPanel({
               <div className="grid grid-cols-2 gap-2 font-mono text-xs">
                 <div className="bg-slate-900 p-2 rounded-lg border border-slate-800">
                   <div className="text-[9px] text-slate-500">LATITUDE</div>
-                  <div className="text-white font-medium text-xs tracking-tight">{roverLocation.lat.toFixed(7)}°</div>
+                  <div className="text-white font-medium text-xs tracking-tight">
+                    {typeof roverLocation.lat === 'number' ? roverLocation.lat.toFixed(7) : '0.0000000'}°
+                  </div>
                 </div>
 
                 <div className="bg-slate-900 p-2 rounded-lg border border-slate-800">
                   <div className="text-[9px] text-slate-500">LONGITUDE</div>
-                  <div className="text-white font-medium text-xs tracking-tight">{roverLocation.lng.toFixed(7)}°</div>
+                  <div className="text-white font-medium text-xs tracking-tight">
+                    {typeof roverLocation.lng === 'number' ? roverLocation.lng.toFixed(7) : '0.0000000'}°
+                  </div>
                 </div>
 
                 <div className="bg-slate-900 p-1.5 px-2 rounded-lg border border-slate-800 flex justify-between items-center">
                   <span className="text-[9px] text-slate-500">ACCURACY</span>
                   <span className="text-emerald-400 font-bold text-xs">
-                    {roverLocation.accuracy !== undefined ? `±${roverLocation.accuracy.toFixed(2)}m` : 'N/A'}
+                    {typeof roverLocation.accuracy === 'number' ? `±${roverLocation.accuracy.toFixed(2)}m` : 'N/A'}
                   </span>
                 </div>
 
                 <div className="bg-slate-900 p-1.5 px-2 rounded-lg border border-slate-800 flex justify-between items-center">
                   <span className="text-[9px] text-slate-500">LAST PING</span>
                   <span className="text-slate-400 text-[9px]">
-                    {new Date(roverLocation.timestamp).toLocaleTimeString()}
+                    {new Date(roverLocation.timestamp || Date.now()).toLocaleTimeString()}
                   </span>
                 </div>
               </div>
@@ -550,7 +554,9 @@ export default function ControlPanel({
                               </span>
                               <div>
                                 <div className="text-slate-200 text-[11px] flex items-center gap-1">
-                                  <span>{point.lat.toFixed(6)}°, {point.lng.toFixed(6)}°</span>
+                                  <span>
+                                    {typeof point.lat === 'number' ? point.lat.toFixed(6) : '0.000000'}°, {typeof point.lng === 'number' ? point.lng.toFixed(6) : '0.000000'}°
+                                  </span>
                                   {isOutlier && (
                                     <span className="text-[9px] text-amber-400 font-bold bg-amber-500/20 px-1 rounded">OUTLIER</span>
                                   )}

@@ -558,6 +558,22 @@ export default function DashboardPage() {
     }));
   }, []);
 
+  // Capture point by clicking directly on the map screen
+  const handleMapClick = useCallback((lat: number, lng: number) => {
+    setCapturedPoints((prev) => {
+      const newPoint: CapturedPoint = {
+        id: `pt_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+        pointNumber: prev.length + 1,
+        lat: Number(lat.toFixed(7)),
+        lng: Number(lng.toFixed(7)),
+        accuracy: 0.05,
+        timestamp: Date.now(),
+        elevation: 120.0,
+      };
+      return [...prev, newPoint];
+    });
+  }, []);
+
   return (
     <main className="relative w-screen h-screen overflow-hidden bg-slate-950 font-sans">
       {/* Top Floating Header & Search Bar */}
@@ -662,6 +678,7 @@ export default function DashboardPage() {
           polygonDisplayMode={polygonDisplayMode}
           centerOnUserTrigger={centerOnUserTrigger}
           onUpdatePointLocation={handleUpdatePointLocation}
+          onMapClick={handleMapClick}
         />
       </div>
 

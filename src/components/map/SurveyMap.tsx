@@ -10,6 +10,7 @@ import {
   Polyline,
   Circle,
   useMap,
+  useMapEvents,
 } from 'react-leaflet';
 import L from 'leaflet';
 import { CapturedPoint, GpsLocation, GeocodedPlace } from '@/types/survey';
@@ -27,6 +28,7 @@ interface SurveyMapProps {
   mapStyle?: 'osm' | 'street' | 'topo' | 'satellite';
   polygonDisplayMode?: 'captured' | 'auto_uncross' | 'convex_hull' | 'smooth_spline';
   centerOnUserTrigger?: number;
+  onMapClick?: (lat: number, lng: number) => void;
 }
 
 function MapController({
@@ -35,17 +37,27 @@ function MapController({
   searchedPlace,
   centerOnUserTrigger,
   onUserLocationFound,
+  onMapClick,
 }: {
   roverLocation: GpsLocation | null;
   autoFollow: boolean;
   searchedPlace?: GeocodedPlace | null;
   centerOnUserTrigger?: number;
   onUserLocationFound: (lat: number, lng: number, acc?: number) => void;
+  onMapClick?: (lat: number, lng: number) => void;
 }) {
   const map = useMap();
   const hasCenteredInitial = useRef(false);
   const lastTriggerRef = useRef(0);
   const roverRef = useRef(roverLocation);
+
+  useMapEvents({
+    click(e) {
+      if (onMapClick) {
+        onMapClick(e.latlng.lat, e.latlng.lng);
+      }
+    },
+  });
 
   useEffect(() => {
     roverRef.current = roverLocation;
@@ -121,6 +133,7 @@ export default function SurveyMap({
   mapStyle = 'osm',
   polygonDisplayMode = 'captured',
   centerOnUserTrigger = 0,
+  onMapClick,
 }: SurveyMapProps) {
   const [mapType, setMapType] = useState<'osm' | 'street' | 'topo' | 'satellite'>(mapStyle);
   const [showAccuracyCircle, setShowAccuracyCircle] = useState(true);
@@ -219,8 +232,6 @@ export default function SurveyMap({
     });
   }, []);
 
-
-
   // Distinct Start, End, Outlier & Vertex Point Markers
   const createCustomPointIcon = (point: CapturedPoint, totalCount: number, isOutlier: boolean) => {
     const isStart = point.pointNumber === 1;
@@ -257,11 +268,26 @@ export default function SurveyMap({
     });
   };
 
-  const polygonCoords = useMemo<[number, number][]>(() => {
-    return capturedPoints.filter((p) => !p.isExcluded).map((p) => [p.lat, p.lng]);
+  const validPoints = useMemo(() => {
+    return capturedPoints.filter(
+      (p): p is CapturedPoint =>
+        Boolean(p) &&
+        typeof p.lat === 'number' &&
+        typeof p.lng === 'number' &&
+        !isNaN(p.lat) &&
+        !isNaN(p.lng)
+    );
   }, [capturedPoints]);
 
-  const activePointsCount = capturedPoints.filter((p) => !p.isExcluded).length;
+  const activeValidPoints = useMemo(() => {
+    return validPoints.filter((p) => !p.isExcluded);
+  }, [validPoints]);
+
+  const polygonCoords = useMemo<[number, number][]>(() => {
+    return activeValidPoints.map((p) => [p.lat, p.lng]);
+  }, [activeValidPoints]);
+
+  const activePointsCount = activeValidPoints.length;
   const outlierIds = metrics?.outlierPointIds || [];
 
   return (
@@ -296,10 +322,11 @@ export default function SurveyMap({
           searchedPlace={searchedPlace}
           centerOnUserTrigger={effectiveTrigger}
           onUserLocationFound={handleUserLocationFound}
+          onMapClick={onMapClick}
         />
 
         {/* User Location Marker */}
-        {userLocation && !roverLocation && (
+        {userLocation && !roverLocation && typeof userLocation.lat === 'number' && typeof userLocation.lng === 'number' && (
           <Marker
             position={[userLocation.lat, userLocation.lng]}
             icon={userIcon}
@@ -316,7 +343,7 @@ export default function SurveyMap({
         )}
 
         {/* Rover Accuracy Circle */}
-        {roverLocation && showAccuracyCircle && roverLocation.accuracy && (
+        {roverLocation && showAccuracyCircle && typeof roverLocation.accuracy === 'number' && (
           <Circle
             center={[roverLocation.lat, roverLocation.lng]}
             radius={roverLocation.accuracy}
@@ -331,7 +358,7 @@ export default function SurveyMap({
         )}
 
         {/* Active Rover / Position Marker */}
-        {roverLocation && (
+        {roverLocation && typeof roverLocation.lat === 'number' && typeof roverLocation.lng === 'number' && (
           <Marker
             position={[roverLocation.lat, roverLocation.lng]}
             icon={roverIcon}
@@ -345,7 +372,7 @@ export default function SurveyMap({
                 <div className="space-y-1">
                   <div>Lat: {roverLocation.lat.toFixed(7)}°</div>
                   <div>Lng: {roverLocation.lng.toFixed(7)}°</div>
-                  {roverLocation.accuracy !== undefined && (
+                  {typeof roverLocation.accuracy === 'number' && (
                     <div className="text-emerald-400">Accuracy: ±{roverLocation.accuracy.toFixed(2)}m</div>
                   )}
                 </div>
@@ -355,7 +382,7 @@ export default function SurveyMap({
         )}
 
         {/* Searched Place Marker */}
-        {searchedPlace && (
+        {searchedPlace && typeof searchedPlace.lat === 'number' && typeof searchedPlace.lng === 'number' && (
           <Marker
             position={[searchedPlace.lat, searchedPlace.lng]}
             icon={searchPlaceIcon}
@@ -371,10 +398,10 @@ export default function SurveyMap({
         )}
 
         {/* Live guide line from last captured point to active rover position */}
-        {roverLocation && capturedPoints.length > 0 && (
+        {roverLocation && validPoints.length > 0 && typeof roverLocation.lat === 'number' && typeof roverLocation.lng === 'number' && (
           <Polyline
             positions={[
-              [capturedPoints[capturedPoints.length - 1].lat, capturedPoints[capturedPoints.length - 1].lng],
+              [validPoints[validPoints.length - 1].lat, validPoints[validPoints.length - 1].lng],
               [roverLocation.lat, roverLocation.lng],
             ]}
             pathOptions={{
@@ -390,8 +417,8 @@ export default function SurveyMap({
         {activePointsCount >= 3 && (
           <Polyline
             positions={[
-              [capturedPoints[capturedPoints.length - 1].lat, capturedPoints[capturedPoints.length - 1].lng],
-              [capturedPoints[0].lat, capturedPoints[0].lng],
+              [activeValidPoints[activePointsCount - 1].lat, activeValidPoints[activePointsCount - 1].lng],
+              [activeValidPoints[0].lat, activeValidPoints[0].lng],
             ]}
             pathOptions={{
               color: '#f59e0b',
@@ -468,13 +495,16 @@ export default function SurveyMap({
         )}
 
         {/* Boundary Vertex Markers (Draggable for Manual Editing!) */}
-        {capturedPoints.map((point) => {
+        {validPoints.map((point) => {
           const isOutlier = outlierIds.includes(point.id);
+          const safeLat = typeof point.lat === 'number' ? point.lat.toFixed(7) : '0.0000000';
+          const safeLng = typeof point.lng === 'number' ? point.lng.toFixed(7) : '0.0000000';
+
           return (
             <Marker
               key={point.id}
               position={[point.lat, point.lng]}
-              icon={createCustomPointIcon(point, capturedPoints.length, isOutlier)}
+              icon={createCustomPointIcon(point, validPoints.length, isOutlier)}
               draggable={true}
               eventHandlers={{
                 click: () => onSelectPoint && onSelectPoint(point),
@@ -490,11 +520,11 @@ export default function SurveyMap({
               <Popup>
                 <div className="p-1.5 text-xs font-mono text-slate-100 min-w-[160px]">
                   <div className="font-semibold text-sky-400 border-b border-slate-700 pb-1 mb-1 flex items-center justify-between">
-                    <span>Point #{point.pointNumber} {point.pointNumber === 1 ? '(START)' : point.pointNumber === capturedPoints.length ? '(END)' : ''}</span>
+                    <span>Point #{point.pointNumber} {point.pointNumber === 1 ? '(START)' : point.pointNumber === validPoints.length ? '(END)' : ''}</span>
                     <span className="text-[9px] bg-slate-800 px-1 py-0.5 rounded text-slate-400">Draggable</span>
                   </div>
-                  <div>Lat: {point.lat.toFixed(7)}°</div>
-                  <div>Lng: {point.lng.toFixed(7)}°</div>
+                  <div>Lat: {safeLat}°</div>
+                  <div>Lng: {safeLng}°</div>
                   {isOutlier && (
                     <div className="text-amber-400 text-[10px] font-bold mt-1">
                       ⚠️ Potential GPS Outlier Spike

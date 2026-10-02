@@ -16,6 +16,7 @@ interface DynamicMapProps {
   mapStyle?: 'osm' | 'street' | 'topo' | 'satellite';
   polygonDisplayMode?: 'captured' | 'auto_uncross' | 'convex_hull' | 'smooth_spline';
   centerOnUserTrigger?: number;
+  onMapClick?: (lat: number, lng: number) => void;
 }
 
 // Dynamically import SurveyMap with SSR disabled to prevent window is not defined errors
