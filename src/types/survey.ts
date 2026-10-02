@@ -17,6 +17,16 @@ export interface CapturedPoint {
   timestamp: number;
   elevation?: number | null;
   address?: string;
+  isOutlier?: boolean;
+  isExcluded?: boolean;
+}
+
+export interface SegmentDetail {
+  fromPointNumber: number;
+  toPointNumber: number;
+  lengthMeters: number;
+  lengthFeet: number;
+  bearingDegrees: number;
 }
 
 export interface SurveyMetrics {
@@ -24,16 +34,27 @@ export interface SurveyMetrics {
   areaHectares: number;
   areaAcres: number;
   areaSqFeet: number;
+  areaGuntha: number;
+  areaBigha: number;
   perimeterMeters: number;
   perimeterKm: number;
   perimeterFeet: number;
   pointCount: number;
   centroid?: { lat: number; lng: number };
+  hasKinks: boolean;
+  kinkCount: number;
+  closureDistanceMeters: number;
+  closureBearingDegrees: number;
+  segments: SegmentDetail[];
+  outlierPointIds: string[];
+  isLoopClosed: boolean;
 }
 
 export type MqttConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error' | 'reconnecting';
 
 export type LocationSource = 'mqtt' | 'device' | 'emulator';
+
+export type PolygonDisplayMode = 'captured' | 'auto_uncross' | 'convex_hull' | 'smooth_spline';
 
 export interface TelemetryPayload {
   lat: number;
@@ -62,12 +83,16 @@ export interface AppSettings {
   mqttBrokerUrl: string;
   mqttTopic: string;
   mapStyle: 'osm' | 'street' | 'topo' | 'satellite';
+  polygonDisplayMode?: PolygonDisplayMode;
+  autoCloseLoop?: boolean;
+  filterOutliers?: boolean;
 }
 
 export interface UserProfile {
   id: string;
   name: string;
   email: string;
+  photoURL?: string;
   role: 'lead_surveyor' | 'field_technician' | 'gis_analyst';
   organization?: string;
   isAuthenticated: boolean;
@@ -82,4 +107,6 @@ export interface SurveyProject {
   metrics: SurveyMetrics | null;
   createdAt: number;
   updatedAt: number;
+  syncedToCloud?: boolean;
 }
+

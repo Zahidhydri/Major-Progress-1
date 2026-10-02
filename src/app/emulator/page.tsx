@@ -24,6 +24,11 @@ import {
   MapPin,
   Keyboard,
   Check,
+  Activity,
+  Layers,
+  Sparkles,
+  Maximize2,
+  RefreshCw,
 } from 'lucide-react';
 
 export default function RoverEmulatorPage() {
@@ -48,6 +53,7 @@ export default function RoverEmulatorPage() {
   const [inputLat, setInputLat] = useState<string>('');
   const [inputLng, setInputLng] = useState<string>('');
   const [locationSynced, setLocationSynced] = useState(false);
+  const [activeDirection, setActiveDirection] = useState<'N' | 'S' | 'E' | 'W' | null>(null);
 
   const clientRef = useRef<MqttClient | null>(null);
   const watchIdRef = useRef<number | null>(null);
@@ -211,10 +217,15 @@ export default function RoverEmulatorPage() {
 
   // Step movement helper (North, South, East, West)
   const moveSimulated = useCallback(
-    (dLat: number, dLng: number, heading: number) => {
+    (dLat: number, dLng: number, heading: number, dir?: 'N' | 'S' | 'E' | 'W') => {
       if (!isSurveying) {
         setIsSurveying(true);
       }
+      if (dir) {
+        setActiveDirection(dir);
+        setTimeout(() => setActiveDirection(null), 250);
+      }
+
       setCurrentPosition((prev) => {
         const baseLat = prev ? prev.lat : 21.1458;
         const baseLng = prev ? prev.lng : 79.0882;
@@ -238,7 +249,7 @@ export default function RoverEmulatorPage() {
     [isSurveying, publishLocation]
   );
 
-  // Keyboard Arrow Keys Navigation (Desktop support)
+  // Keyboard Arrow Keys & WASD Navigation for Desktop
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (document.activeElement?.tagName === 'INPUT') return;
@@ -248,25 +259,25 @@ export default function RoverEmulatorPage() {
         case 'w':
         case 'W':
           e.preventDefault();
-          moveSimulated(stepSize, 0, 0);
+          moveSimulated(stepSize, 0, 0, 'N');
           break;
         case 'ArrowDown':
         case 's':
         case 'S':
           e.preventDefault();
-          moveSimulated(-stepSize, 0, 180);
+          moveSimulated(-stepSize, 0, 180, 'S');
           break;
         case 'ArrowLeft':
         case 'a':
         case 'A':
           e.preventDefault();
-          moveSimulated(0, -stepSize * 1.3, 270);
+          moveSimulated(0, -stepSize * 1.3, 270, 'W');
           break;
         case 'ArrowRight':
         case 'd':
         case 'D':
           e.preventDefault();
-          moveSimulated(0, stepSize * 1.3, 90);
+          moveSimulated(0, stepSize * 1.3, 90, 'E');
           break;
       }
     };
@@ -280,19 +291,19 @@ export default function RoverEmulatorPage() {
     if (autoWalk && isSurveying) {
       let step = 0;
       const directions = [
-        { dLat: stepSize, dLng: 0, h: 0 },
-        { dLat: stepSize, dLng: 0, h: 0 },
-        { dLat: 0, dLng: stepSize * 1.3, h: 90 },
-        { dLat: 0, dLng: stepSize * 1.3, h: 90 },
-        { dLat: -stepSize, dLng: 0, h: 180 },
-        { dLat: -stepSize, dLng: 0, h: 180 },
-        { dLat: 0, dLng: -stepSize * 1.3, h: 270 },
-        { dLat: 0, dLng: -stepSize * 1.3, h: 270 },
+        { dLat: stepSize, dLng: 0, h: 0, dir: 'N' as const },
+        { dLat: stepSize, dLng: 0, h: 0, dir: 'N' as const },
+        { dLat: 0, dLng: stepSize * 1.3, h: 90, dir: 'E' as const },
+        { dLat: 0, dLng: stepSize * 1.3, h: 90, dir: 'E' as const },
+        { dLat: -stepSize, dLng: 0, h: 180, dir: 'S' as const },
+        { dLat: -stepSize, dLng: 0, h: 180, dir: 'S' as const },
+        { dLat: 0, dLng: -stepSize * 1.3, h: 270, dir: 'W' as const },
+        { dLat: 0, dLng: -stepSize * 1.3, h: 270, dir: 'W' as const },
       ];
 
       autoWalkIntervalRef.current = setInterval(() => {
         const dir = directions[step % directions.length];
-        moveSimulated(dir.dLat, dir.dLng, dir.h);
+        moveSimulated(dir.dLat, dir.dLng, dir.h, dir.dir);
         step++;
       }, 1500);
     } else {
@@ -349,289 +360,326 @@ export default function RoverEmulatorPage() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-slate-950 text-slate-100 flex flex-col items-center justify-start p-3 md:p-6 font-sans select-none pb-24 overflow-y-auto">
-      {/* Container Grid for Responsive Layout */}
-      <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-        {/* Left Column: Handheld Rover Controller */}
-        <div className="lg:col-span-6 w-full bg-slate-900 border-2 border-slate-700/80 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] lg:max-h-none">
-          {/* Top Hardware Bezel Bar */}
-          <div className="bg-slate-950 px-4 py-3 border-b border-slate-800 flex items-center justify-between flex-shrink-0">
-            <div className="flex items-center space-x-2">
-              <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse shadow-glow-rover" />
-              <span className="font-mono text-xs font-bold text-slate-200 tracking-wider">
-                RTK-EMULATOR // GNSS-PRO-X
-              </span>
-            </div>
+    <div className="w-screen h-screen bg-slate-950 text-slate-100 flex flex-col font-sans select-none overflow-hidden">
+      {/* Studio Header Navigation Bar */}
+      <header className="w-full h-14 bg-slate-900/90 backdrop-blur-md border-b border-slate-800 px-4 md:px-6 flex items-center justify-between shrink-0 z-50">
+        <div className="flex items-center space-x-3">
+          <a
+            href="/"
+            className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 font-semibold text-xs border border-slate-700 transition flex items-center space-x-1.5 shadow-sm"
+          >
+            <span>← Back to Map</span>
+          </a>
 
-            <div className="flex items-center space-x-2">
-              {mqttStatus === 'connected' ? (
-                <span className="flex items-center space-x-1 text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
-                  <Wifi className="w-3 h-3" />
-                  <span>ONLINE</span>
-                </span>
-              ) : (
-                <span className="flex items-center space-x-1 text-[10px] font-mono text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/30">
-                  <WifiOff className="w-3 h-3" />
-                  <span className="capitalize">{mqttStatus}</span>
-                </span>
-              )}
-            </div>
-          </div>
+          <div className="h-4 w-px bg-slate-800 hidden sm:block" />
 
-          {/* Top Location Sync Header */}
-          <div className="bg-slate-950/60 p-3 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs flex-shrink-0">
-            <button
-              onClick={syncToUserLocation}
-              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow transition active:scale-95"
-            >
-              <LocateFixed className="w-4 h-4" />
-              <span>{locationSynced ? 'Location Synced!' : 'Sync to My Location'}</span>
-            </button>
-
-            <a
-              href="/"
-              target="_blank"
-              className="text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-medium hover:underline text-xs"
-            >
-              <span>Dashboard Map</span>
-              <ExternalLink className="w-3 h-3" />
-            </a>
-          </div>
-
-          {/* Scrollable Control Panel Body */}
-          <div className="p-4 md:p-5 space-y-4 overflow-y-auto max-h-[calc(85vh-110px)] lg:max-h-none pr-1.5">
-            {/* Main Giant Survey Toggle Button */}
-            <button
-              onClick={toggleSurvey}
-              className={`w-full py-4 px-6 rounded-2xl font-black text-base tracking-wider uppercase transition-all duration-300 flex items-center justify-center space-x-3 shadow-2xl relative overflow-hidden active:scale-[0.98] ${
-                isSurveying
-                  ? 'bg-gradient-to-r from-rose-600 via-red-600 to-amber-600 text-white shadow-rose-600/30 border border-rose-500'
-                  : 'bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 text-slate-950 font-extrabold shadow-emerald-500/30 border border-emerald-400'
-              }`}
-            >
-              {isSurveying ? (
-                <>
-                  <Square className="w-5 h-5 fill-current animate-pulse" />
-                  <span>STOP BROADCASTING TELEMETRY</span>
-                </>
-              ) : (
-                <>
-                  <Play className="w-5 h-5 fill-current" />
-                  <span>START TELEMETRY STREAM</span>
-                </>
-              )}
-            </button>
-
-            {/* Telemetry Display HUD Card */}
-            <div className="bg-slate-950/80 rounded-2xl border border-slate-800 p-3.5 space-y-3 font-mono shadow-inner">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                <span className="text-[10px] font-bold text-cyan-400 flex items-center gap-1.5 uppercase tracking-wider">
-                  <Radio className="w-3.5 h-3.5" /> High Precision RTK Telemetry
-                </span>
-                <span className="text-[9px] text-slate-400">
-                  {isSurveying ? '● STREAMING 1Hz' : '○ STANDBY'}
-                </span>
-              </div>
-
-              {/* Coordinates Grid */}
-              <div className="grid grid-cols-2 gap-2">
-                <div className="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
-                  <div className="text-[9px] text-slate-400 uppercase tracking-wider">Latitude</div>
-                  <div className="text-sm font-bold text-white tracking-tight mt-0.5">
-                    {currentPosition ? currentPosition.lat.toFixed(7) : '0.0000000'}°
-                  </div>
-                  <div className="text-[9px] text-slate-500 truncate mt-0.5">
-                    {currentPosition ? formatDMS(currentPosition.lat, true) : '--'}
-                  </div>
-                </div>
-
-                <div className="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
-                  <div className="text-[9px] text-slate-400 uppercase tracking-wider">Longitude</div>
-                  <div className="text-sm font-bold text-white tracking-tight mt-0.5">
-                    {currentPosition ? currentPosition.lng.toFixed(7) : '0.0000000'}°
-                  </div>
-                  <div className="text-[9px] text-slate-500 truncate mt-0.5">
-                    {currentPosition ? formatDMS(currentPosition.lng, false) : '--'}
-                  </div>
-                </div>
-              </div>
-
-              {/* Metrics Ribbon */}
-              <div className="grid grid-cols-3 gap-2 text-center pt-0.5">
-                <div className="bg-slate-900/60 p-1.5 rounded-lg border border-slate-800">
-                  <div className="text-[8px] text-slate-400">RTK ACCURACY</div>
-                  <div className="text-xs font-bold text-emerald-400 mt-0.5">
-                    {currentPosition?.accuracy ? `±${currentPosition.accuracy.toFixed(2)}m` : '±0.03m'}
-                  </div>
-                </div>
-
-                <div className="bg-slate-900/60 p-1.5 rounded-lg border border-slate-800">
-                  <div className="text-[8px] text-slate-400">ELEVATION</div>
-                  <div className="text-xs font-bold text-cyan-300 mt-0.5">
-                    {currentPosition?.altitude ? `${currentPosition.altitude.toFixed(1)}m` : '120.0m'}
-                  </div>
-                </div>
-
-                <div className="bg-slate-900/60 p-1.5 rounded-lg border border-slate-800">
-                  <div className="text-[8px] text-slate-400">SPEED</div>
-                  <div className="text-xs font-bold text-amber-400 mt-0.5">
-                    {currentPosition?.speed ? `${currentPosition.speed.toFixed(1)} m/s` : '0.0 m/s'}
-                  </div>
-                </div>
-              </div>
-
-              {/* Packet Transmission Meter */}
-              <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[10px] text-slate-400">
-                <span>Packets Transmitted: <strong className="text-white font-mono">{packetsSent}</strong></span>
-                <span>Last Sent: <strong className="text-cyan-400 font-mono">{lastTransmission}</strong></span>
-              </div>
-            </div>
-
-            {/* Custom Coordinates Manual Input */}
-            <div className="bg-slate-950/60 rounded-2xl border border-slate-800 p-3 space-y-2">
-              <div className="text-[10px] font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                <MapPin className="w-3.5 h-3.5 text-cyan-400" /> Set Custom Starting Coordinates
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-[9px] text-slate-400 block mb-1">LATITUDE</label>
-                  <input
-                    type="text"
-                    value={inputLat}
-                    onChange={(e) => setInputLat(e.target.value)}
-                    placeholder="27.7172000"
-                    className="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-slate-100 font-mono focus:outline-none focus:border-cyan-400"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[9px] text-slate-400 block mb-1">LONGITUDE</label>
-                  <input
-                    type="text"
-                    value={inputLng}
-                    onChange={(e) => setInputLng(e.target.value)}
-                    placeholder="85.3240000"
-                    className="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-slate-100 font-mono focus:outline-none focus:border-cyan-400"
-                  />
-                </div>
-              </div>
-
-              <button
-                onClick={handleApplyCustomCoords}
-                className="w-full py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition border border-slate-700 active:scale-95"
-              >
-                Apply Coordinates
-              </button>
-            </div>
-
-            {/* D-Pad & Controls Card */}
-            <div className="bg-slate-950/60 rounded-2xl border border-slate-800 p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-1.5">
-                  <Sliders className="w-4 h-4 text-cyan-400" />
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-200">
-                    Joystick & Controls
-                  </span>
-                </div>
-
-                {/* Step Size Selector */}
-                <div className="flex items-center space-x-1 text-[10px] font-mono">
-                  <span className="text-slate-400">Step:</span>
-                  <select
-                    value={stepSize}
-                    onChange={(e) => setStepSize(Number(e.target.value))}
-                    className="bg-slate-900 border border-slate-700 text-cyan-300 rounded px-1.5 py-0.5"
-                  >
-                    <option value={0.00001}>1m</option>
-                    <option value={0.00003}>3m</option>
-                    <option value={0.00005}>5m</option>
-                    <option value={0.00015}>15m</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Touch D-Pad Joystick */}
-              <div className="flex flex-col items-center justify-center space-y-2 py-2 select-none">
-                <button
-                  onClick={() => moveSimulated(stepSize, 0, 0)}
-                  className="w-12 h-12 rounded-2xl bg-slate-800 hover:bg-cyan-600 active:bg-cyan-500 text-white border border-slate-700 hover:border-cyan-400 flex items-center justify-center transition active:scale-90 shadow-lg touch-manipulation"
-                  title="Step North (W / Up Arrow)"
-                >
-                  <ArrowUp className="w-6 h-6" />
-                </button>
-
-                <div className="flex items-center space-x-4">
-                  <button
-                    onClick={() => moveSimulated(0, -stepSize * 1.3, 270)}
-                    className="w-12 h-12 rounded-2xl bg-slate-800 hover:bg-cyan-600 active:bg-cyan-500 text-white border border-slate-700 hover:border-cyan-400 flex items-center justify-center transition active:scale-90 shadow-lg touch-manipulation"
-                    title="Step West (A / Left Arrow)"
-                  >
-                    <ArrowLeft className="w-6 h-6" />
-                  </button>
-
-                  <div className="w-12 h-12 rounded-full bg-slate-950 border-2 border-slate-700 flex flex-col items-center justify-center text-[9px] font-mono text-cyan-400 font-bold shadow-inner">
-                    <span>WALK</span>
-                  </div>
-
-                  <button
-                    onClick={() => moveSimulated(0, stepSize * 1.3, 90)}
-                    className="w-12 h-12 rounded-2xl bg-slate-800 hover:bg-cyan-600 active:bg-cyan-500 text-white border border-slate-700 hover:border-cyan-400 flex items-center justify-center transition active:scale-90 shadow-lg touch-manipulation"
-                    title="Step East (D / Right Arrow)"
-                  >
-                    <ArrowRight className="w-6 h-6" />
-                  </button>
-                </div>
-
-                <button
-                  onClick={() => moveSimulated(-stepSize, 0, 180)}
-                  className="w-12 h-12 rounded-2xl bg-slate-800 hover:bg-cyan-600 active:bg-cyan-500 text-white border border-slate-700 hover:border-cyan-400 flex items-center justify-center transition active:scale-90 shadow-lg touch-manipulation"
-                  title="Step South (S / Down Arrow)"
-                >
-                  <ArrowDown className="w-6 h-6" />
-                </button>
-              </div>
-
-              {/* Desktop Keyboard Shortcuts Tip */}
-              <div className="p-2 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between text-[10px] text-slate-400">
-                <span className="flex items-center gap-1">
-                  <Keyboard className="w-3.5 h-3.5 text-slate-300" />
-                  <span>Desktop Shortcut Keys:</span>
-                </span>
-                <span className="font-mono text-cyan-300">W, A, S, D / Arrow Keys</span>
-              </div>
-
-              {/* Auto-Walk Patrol Toggle */}
-              <div className="flex items-center justify-between pt-1 border-t border-slate-800">
-                <span className="text-xs text-slate-300 font-medium">Auto Patrol Simulation</span>
-                <button
-                  onClick={() => setAutoWalk(!autoWalk)}
-                  disabled={!isSurveying}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 ${
-                    autoWalk
-                      ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-glow-rover'
-                      : 'bg-slate-800 text-slate-300 hover:text-white border-slate-700 disabled:opacity-40'
-                  }`}
-                >
-                  <Footprints className="w-3.5 h-3.5" />
-                  <span>{autoWalk ? 'Patrolling...' : 'Auto Perimeter Walk'}</span>
-                </button>
-              </div>
-            </div>
+          <div className="flex items-center space-x-2">
+            <div className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse shadow-glow-rover" />
+            <h1 className="text-xs font-bold text-white tracking-wider font-mono uppercase">
+              GNSS RTK Telemetry Studio <span className="text-[10px] text-slate-400 font-normal">v2.4 Desktop</span>
+            </h1>
           </div>
         </div>
 
-        {/* Right Column: Live Interactive GIS Map Preview */}
-        <div className="lg:col-span-6 w-full h-[400px] lg:h-[680px] bg-slate-900 border-2 border-slate-700/80 rounded-3xl shadow-2xl overflow-hidden flex flex-col">
-          <div className="bg-slate-950 px-4 py-3 border-b border-slate-800 flex items-center justify-between">
-            <span className="font-mono text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-              Live Simulated GIS Map Preview
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={syncToUserLocation}
+            className="hidden sm:flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-blue-600/90 hover:bg-blue-500 text-white font-semibold text-xs transition border border-blue-500/50 shadow-sm"
+          >
+            <LocateFixed className="w-3.5 h-3.5" />
+            <span>{locationSynced ? 'Synced!' : 'My Location'}</span>
+          </button>
+
+          {mqttStatus === 'connected' ? (
+            <span className="flex items-center space-x-1 text-[10px] text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-xl border border-emerald-500/30 font-bold font-mono">
+              <Wifi className="w-3.5 h-3.5" />
+              <span>MQTT LIVE</span>
             </span>
-            <span className="text-[10px] text-slate-400 font-mono">ROVER SYNC ACTIVE</span>
+          ) : (
+            <span className="flex items-center space-x-1 text-[10px] text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-xl border border-amber-500/30 font-bold font-mono">
+              <WifiOff className="w-3.5 h-3.5" />
+              <span className="capitalize">{mqttStatus}</span>
+            </span>
+          )}
+        </div>
+      </header>
+
+      {/* Main Desktop Studio 2-Column Layout */}
+      <div className="flex-1 w-full grid grid-cols-1 lg:grid-cols-12 overflow-hidden">
+        {/* Left Column: Handheld Rover Telemetry Control Deck */}
+        <div className="lg:col-span-5 h-full overflow-y-auto p-4 md:p-5 space-y-4 border-r border-slate-800/80 bg-slate-950/60 custom-scrollbar">
+          {/* Main Giant Survey Toggle Button */}
+          <button
+            onClick={toggleSurvey}
+            className={`w-full py-4 px-6 rounded-2xl font-black text-sm tracking-wider uppercase transition-all duration-300 flex items-center justify-center space-x-3 shadow-2xl relative overflow-hidden active:scale-[0.98] ${
+              isSurveying
+                ? 'bg-gradient-to-r from-rose-600 via-red-600 to-amber-600 text-white shadow-rose-600/30 border border-rose-500'
+                : 'bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 text-slate-950 font-extrabold shadow-emerald-500/30 border border-emerald-400'
+            }`}
+          >
+            {isSurveying ? (
+              <>
+                <Square className="w-5 h-5 fill-current animate-pulse" />
+                <span>PAUSE TELEMETRY STREAM</span>
+              </>
+            ) : (
+              <>
+                <Play className="w-5 h-5 fill-current" />
+                <span>START TELEMETRY STREAM</span>
+              </>
+            )}
+          </button>
+
+          {/* Telemetry Display HUD Card */}
+          <div className="bg-slate-900/90 rounded-2xl border border-slate-800 p-4 space-y-3 font-mono shadow-xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+              <span className="text-[10px] font-bold text-cyan-400 flex items-center gap-1.5 uppercase tracking-wider">
+                <Radio className="w-3.5 h-3.5" /> High Precision RTK Telemetry HUD
+              </span>
+              <span className="text-[9px] text-slate-400">
+                {isSurveying ? '● STREAMING 1Hz' : '○ STANDBY'}
+              </span>
+            </div>
+
+            {/* Coordinates Grid */}
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800/80">
+                <div className="text-[9px] text-slate-400 uppercase tracking-wider">Latitude</div>
+                <div className="text-sm font-bold text-white tracking-tight mt-0.5">
+                  {currentPosition ? currentPosition.lat.toFixed(7) : '0.0000000'}°
+                </div>
+                <div className="text-[9px] text-slate-500 truncate mt-0.5">
+                  {currentPosition ? formatDMS(currentPosition.lat, true) : '--'}
+                </div>
+              </div>
+
+              <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800/80">
+                <div className="text-[9px] text-slate-400 uppercase tracking-wider">Longitude</div>
+                <div className="text-sm font-bold text-white tracking-tight mt-0.5">
+                  {currentPosition ? currentPosition.lng.toFixed(7) : '0.0000000'}°
+                </div>
+                <div className="text-[9px] text-slate-500 truncate mt-0.5">
+                  {currentPosition ? formatDMS(currentPosition.lng, false) : '--'}
+                </div>
+              </div>
+            </div>
+
+            {/* Metrics Ribbon */}
+            <div className="grid grid-cols-3 gap-2 text-center pt-1">
+              <div className="bg-slate-950 p-2 rounded-xl border border-slate-800/80">
+                <div className="text-[8px] text-slate-400 uppercase">RTK Precision</div>
+                <div className="text-xs font-bold text-emerald-400 mt-0.5">
+                  {currentPosition?.accuracy ? `±${currentPosition.accuracy.toFixed(2)}m` : '±0.03m'}
+                </div>
+              </div>
+
+              <div className="bg-slate-950 p-2 rounded-xl border border-slate-800/80">
+                <div className="text-[8px] text-slate-400 uppercase">Elevation</div>
+                <div className="text-xs font-bold text-cyan-300 mt-0.5">
+                  {currentPosition?.altitude ? `${currentPosition.altitude.toFixed(1)}m` : '120.0m'}
+                </div>
+              </div>
+
+              <div className="bg-slate-950 p-2 rounded-xl border border-slate-800/80">
+                <div className="text-[8px] text-slate-400 uppercase">Rover Speed</div>
+                <div className="text-xs font-bold text-amber-400 mt-0.5">
+                  {currentPosition?.speed ? `${currentPosition.speed.toFixed(1)} m/s` : '0.0 m/s'}
+                </div>
+              </div>
+            </div>
+
+            {/* Packet Transmission Meter */}
+            <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-[10px] text-slate-400">
+              <span>Packets Transmitted: <strong className="text-white font-mono">{packetsSent}</strong></span>
+              <span>Last Sent: <strong className="text-cyan-400 font-mono">{lastTransmission}</strong></span>
+            </div>
           </div>
 
-          <div className="w-full h-full relative">
+          {/* D-Pad Joystick & Controls Card (Optimized for Desktop + Mobile) */}
+          <div className="bg-slate-900/90 rounded-2xl border border-slate-800 p-4 space-y-3 shadow-xl">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-1.5">
+                <Sliders className="w-4 h-4 text-cyan-400" />
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-200">
+                  Interactive D-Pad Joystick
+                </span>
+              </div>
+
+              {/* Step Size Selector */}
+              <div className="flex items-center space-x-1.5 text-[10px] font-mono">
+                <span className="text-slate-400">Step Size:</span>
+                <select
+                  value={stepSize}
+                  onChange={(e) => setStepSize(Number(e.target.value))}
+                  className="bg-slate-950 border border-slate-700 text-cyan-300 rounded-lg px-2 py-1 focus:outline-none"
+                >
+                  <option value={0.00001}>1 Meter</option>
+                  <option value={0.00003}>3 Meters</option>
+                  <option value={0.00005}>5 Meters</option>
+                  <option value={0.00015}>15 Meters</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Touch D-Pad Joystick Grid */}
+            <div className="flex flex-col items-center justify-center space-y-2 py-2 select-none">
+              <button
+                onClick={() => moveSimulated(stepSize, 0, 0, 'N')}
+                className={`w-12 h-12 rounded-2xl border flex items-center justify-center transition active:scale-90 shadow-lg touch-manipulation ${
+                  activeDirection === 'N'
+                    ? 'bg-cyan-500 text-white border-cyan-300 scale-105'
+                    : 'bg-slate-800 hover:bg-cyan-600 text-white border-slate-700 hover:border-cyan-400'
+                }`}
+                title="Step North (W / Up Arrow)"
+              >
+                <ArrowUp className="w-6 h-6" />
+              </button>
+
+              <div className="flex items-center space-x-4">
+                <button
+                  onClick={() => moveSimulated(0, -stepSize * 1.3, 270, 'W')}
+                  className={`w-12 h-12 rounded-2xl border flex items-center justify-center transition active:scale-90 shadow-lg touch-manipulation ${
+                    activeDirection === 'W'
+                      ? 'bg-cyan-500 text-white border-cyan-300 scale-105'
+                      : 'bg-slate-800 hover:bg-cyan-600 text-white border-slate-700 hover:border-cyan-400'
+                  }`}
+                  title="Step West (A / Left Arrow)"
+                >
+                  <ArrowLeft className="w-6 h-6" />
+                </button>
+
+                <div className="w-12 h-12 rounded-full bg-slate-950 border-2 border-slate-700 flex flex-col items-center justify-center text-[9px] font-mono text-cyan-400 font-bold shadow-inner">
+                  <span>ROVER</span>
+                </div>
+
+                <button
+                  onClick={() => moveSimulated(0, stepSize * 1.3, 90, 'E')}
+                  className={`w-12 h-12 rounded-2xl border flex items-center justify-center transition active:scale-90 shadow-lg touch-manipulation ${
+                    activeDirection === 'E'
+                      ? 'bg-cyan-500 text-white border-cyan-300 scale-105'
+                      : 'bg-slate-800 hover:bg-cyan-600 text-white border-slate-700 hover:border-cyan-400'
+                  }`}
+                  title="Step East (D / Right Arrow)"
+                >
+                  <ArrowRight className="w-6 h-6" />
+                </button>
+              </div>
+
+              <button
+                onClick={() => moveSimulated(-stepSize, 0, 180, 'S')}
+                className={`w-12 h-12 rounded-2xl border flex items-center justify-center transition active:scale-90 shadow-lg touch-manipulation ${
+                  activeDirection === 'S'
+                    ? 'bg-cyan-500 text-white border-cyan-300 scale-105'
+                    : 'bg-slate-800 hover:bg-cyan-600 text-white border-slate-700 hover:border-cyan-400'
+                }`}
+                title="Step South (S / Down Arrow)"
+              >
+                <ArrowDown className="w-6 h-6" />
+              </button>
+            </div>
+
+            {/* Desktop Keyboard Shortcuts Banner */}
+            <div className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 flex items-center justify-between text-[11px] text-slate-300 font-mono">
+              <span className="flex items-center gap-1.5 text-slate-400">
+                <Keyboard className="w-4 h-4 text-cyan-400" />
+                <span>Desktop Key Controls:</span>
+              </span>
+              <div className="flex items-center space-x-1 font-bold text-cyan-300">
+                <span className="bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">W</span>
+                <span className="bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">A</span>
+                <span className="bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">S</span>
+                <span className="bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">D</span>
+                <span className="text-slate-500">or</span>
+                <span className="bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">Arrows</span>
+              </div>
+            </div>
+
+            {/* Auto-Walk Patrol Toggle */}
+            <div className="flex items-center justify-between pt-2 border-t border-slate-800">
+              <div className="space-y-0.5">
+                <div className="text-xs text-slate-200 font-bold">Auto Boundary Patrol</div>
+                <div className="text-[10px] text-slate-400">Automatically steps rover along boundary perimeter</div>
+              </div>
+              <button
+                onClick={() => setAutoWalk(!autoWalk)}
+                disabled={!isSurveying}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 ${
+                  autoWalk
+                    ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-glow-rover'
+                    : 'bg-slate-800 text-slate-300 hover:text-white border-slate-700 disabled:opacity-40'
+                }`}
+              >
+                <Footprints className="w-3.5 h-3.5" />
+                <span>{autoWalk ? 'Patrolling...' : 'Auto Walk'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Custom Coordinates Input Card */}
+          <div className="bg-slate-900/90 rounded-2xl border border-slate-800 p-4 space-y-2.5 shadow-xl">
+            <div className="text-[10px] font-bold text-slate-300 uppercase tracking-wider flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 text-cyan-400" /> Set Initial Origin Coordinates
+              </span>
+              <button
+                onClick={syncToUserLocation}
+                className="text-cyan-400 hover:underline flex items-center gap-1 text-[10px]"
+              >
+                <RefreshCw className="w-3 h-3" /> Auto Detect
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5">
+              <div>
+                <label className="text-[9px] text-slate-400 block mb-1 font-mono">LATITUDE</label>
+                <input
+                  type="text"
+                  value={inputLat}
+                  onChange={(e) => setInputLat(e.target.value)}
+                  placeholder="21.1458000"
+                  className="w-full px-2.5 py-1.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-100 font-mono focus:outline-none focus:border-cyan-400"
+                />
+              </div>
+
+              <div>
+                <label className="text-[9px] text-slate-400 block mb-1 font-mono">LONGITUDE</label>
+                <input
+                  type="text"
+                  value={inputLng}
+                  onChange={(e) => setInputLng(e.target.value)}
+                  placeholder="79.0882000"
+                  className="w-full px-2.5 py-1.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-100 font-mono focus:outline-none focus:border-cyan-400"
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={handleApplyCustomCoords}
+              className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition border border-slate-700 active:scale-95 shadow"
+            >
+              Teleport Rover to Coordinates
+            </button>
+          </div>
+        </div>
+
+        {/* Right Column: Live Desktop GIS Map Window */}
+        <div className="lg:col-span-7 h-full relative bg-slate-950 flex flex-col border-l border-slate-800/80">
+          <div className="bg-slate-900/90 px-4 py-2.5 border-b border-slate-800 flex items-center justify-between shrink-0 z-10">
+            <span className="font-mono text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+              Live Interactive Telemetry Map View
+            </span>
+            <div className="flex items-center space-x-2 text-[10px] font-mono text-slate-400">
+              <span className="bg-slate-800 px-2 py-0.5 rounded border border-slate-700 text-cyan-300">
+                BROKER: {brokerUrl.split('//')[1] || 'hivemq'}
+              </span>
+              <span className="bg-slate-800 px-2 py-0.5 rounded border border-slate-700 text-slate-300">
+                TOPIC: {topic}
+              </span>
+            </div>
+          </div>
+
+          <div className="w-full flex-1 relative">
             <DynamicMap
               roverLocation={currentPosition}
               capturedPoints={[]}

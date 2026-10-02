@@ -1,13 +1,14 @@
 'use client';
 
 import React from 'react';
-import { LocateFixed, Plus, Layers, Settings, Zap } from 'lucide-react';
+import { LocateFixed, Plus, Layers, Settings, Zap, Database } from 'lucide-react';
 
 interface MobileNavBarProps {
   onCenterLocation: () => void;
   onCapturePoint: () => void;
   onTogglePanel: () => void;
   onOpenSettings: () => void;
+  onOpenProjectsModal?: () => void;
   autoCaptureEnabled: boolean;
   onToggleAutoCapture: () => void;
   capturedCount: number;
@@ -21,6 +22,7 @@ export default function MobileNavBar({
   onCapturePoint,
   onTogglePanel,
   onOpenSettings,
+  onOpenProjectsModal,
   autoCaptureEnabled,
   onToggleAutoCapture,
   capturedCount,
@@ -39,15 +41,15 @@ export default function MobileNavBar({
         <span className="text-[9px] font-medium text-slate-300 mt-0.5">Center</span>
       </button>
 
-      {/* 2. Map Style Switcher */}
-      {onCycleMapStyle && (
+      {/* 2. Database Button */}
+      {onOpenProjectsModal && (
         <button
-          onClick={onCycleMapStyle}
-          className="flex flex-col items-center justify-center p-1 text-slate-300 hover:text-white transition active:scale-95"
-          title="Cycle Map Style"
+          onClick={onOpenProjectsModal}
+          className="flex flex-col items-center justify-center p-1 text-cyan-400 hover:text-cyan-300 transition active:scale-95"
+          title="Survey Database"
         >
-          <Layers className="w-5 h-5 text-sky-400" />
-          <span className="text-[9px] font-medium text-slate-300 mt-0.5 capitalize">{mapStyle}</span>
+          <Database className="w-5 h-5" />
+          <span className="text-[9px] font-medium mt-0.5">Database</span>
         </button>
       )}
 
@@ -55,7 +57,7 @@ export default function MobileNavBar({
       <button
         onClick={onCapturePoint}
         disabled={!isRoverActive}
-        className={`flex items-center justify-center px-3.5 py-2 rounded-xl text-xs font-bold transition active:scale-95 ${
+        className={`flex items-center justify-center px-3 py-2 rounded-xl text-xs font-bold transition active:scale-95 ${
           isRoverActive
             ? 'bg-slate-100 text-slate-900 shadow-md'
             : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50'

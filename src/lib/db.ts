@@ -117,3 +117,88 @@ export function exportProjectFile(project: SurveyProject) {
   anchor.click();
   anchor.remove();
 }
+
+/**
+ * Export project as standard GeoJSON feature collection (compatible with QGIS, ArcGIS, Google Earth)
+ */
+export function exportProjectGeoJSON(project: SurveyProject) {
+  const coordinates = project.points.map((p) => [p.lng, p.lat, p.elevation || 0]);
+  if (coordinates.length >= 3) {
+    // Close the polygon ring
+    coordinates.push([...coordinates[0]]);
+  }
+
+  const geoJsonData = {
+    type: 'FeatureCollection',
+    features: [
+      {
+        type: 'Feature',
+        geometry: {
+          type: coordinates.length >= 3 ? 'Polygon' : 'LineString',
+          coordinates: coordinates.length >= 3 ? [coordinates] : coordinates,
+        },
+        properties: {
+          id: project.id,
+          title: project.title,
+          clientName: project.clientName || '',
+          areaSqMeters: project.metrics?.areaSqMeters || 0,
+          areaAcres: project.metrics?.areaAcres || 0,
+          areaHectares: project.metrics?.areaHectares || 0,
+          areaGuntha: project.metrics?.areaGuntha || 0,
+          perimeterMeters: project.metrics?.perimeterMeters || 0,
+          pointCount: project.points.length,
+          createdAt: new Date(project.createdAt).toISOString(),
+          updatedAt: new Date(project.updatedAt).toISOString(),
+        },
+      },
+      ...project.points.map((p) => ({
+        type: 'Feature',
+        geometry: {
+          type: 'Point',
+          coordinates: [p.lng, p.lat, p.elevation || 0],
+        },
+        properties: {
+          pointNumber: p.pointNumber,
+          accuracyMeters: p.accuracy || 0,
+          timestamp: new Date(p.timestamp).toISOString(),
+          isOutlier: Boolean(p.isOutlier),
+          isExcluded: Boolean(p.isExcluded),
+        },
+      })),
+    ],
+  };
+
+  const dataStr = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(geoJsonData, null, 2));
+  const anchor = document.createElement('a');
+  anchor.setAttribute('href', dataStr);
+  anchor.setAttribute('download', `${project.title.toLowerCase().replace(/[^a-z0-9]/g, '_')}_survey.geojson`);
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+}
+
+/**
+ * Export survey boundary points as CSV spreadsheet
+ */
+export function exportProjectCSV(project: SurveyProject) {
+  const headers = ['PointNumber', 'Latitude', 'Longitude', 'Elevation_m', 'Accuracy_m', 'Timestamp', 'IsExcluded'];
+  const rows = project.points.map((p) => [
+    p.pointNumber,
+    p.lat.toFixed(7),
+    p.lng.toFixed(7),
+    p.elevation ? p.elevation.toFixed(2) : '',
+    p.accuracy ? p.accuracy.toFixed(2) : '',
+    new Date(p.timestamp).toISOString(),
+    p.isExcluded ? 'TRUE' : 'FALSE',
+  ]);
+
+  const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+  const dataStr = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvContent);
+  const anchor = document.createElement('a');
+  anchor.setAttribute('href', dataStr);
+  anchor.setAttribute('download', `${project.title.toLowerCase().replace(/[^a-z0-9]/g, '_')}_points.csv`);
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+}
+

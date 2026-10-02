@@ -25,6 +25,7 @@ interface SurveyMapProps {
   onUpdatePointLocation?: (id: string, lat: number, lng: number) => void;
   searchedPlace?: GeocodedPlace | null;
   mapStyle?: 'osm' | 'street' | 'topo' | 'satellite';
+  polygonDisplayMode?: 'captured' | 'auto_uncross' | 'convex_hull' | 'smooth_spline';
   centerOnUserTrigger?: number;
 }
 
@@ -86,7 +87,7 @@ function MapController({
     }
   }, [searchedPlace, map]);
 
-  // Clean discrete manual centering (NO FLICKER / NO CONTINUOUS LOOP)
+  // Discrete manual centering
   useEffect(() => {
     if (centerOnUserTrigger && centerOnUserTrigger > lastTriggerRef.current) {
       lastTriggerRef.current = centerOnUserTrigger;
@@ -118,6 +119,7 @@ export default function SurveyMap({
   onUpdatePointLocation,
   searchedPlace,
   mapStyle = 'osm',
+  polygonDisplayMode = 'captured',
   centerOnUserTrigger = 0,
 }: SurveyMapProps) {
   const [mapType, setMapType] = useState<'osm' | 'street' | 'topo' | 'satellite'>(mapStyle);
@@ -135,8 +137,8 @@ export default function SurveyMap({
 
   const effectiveTrigger = centerOnUserTrigger + localCenterTrigger;
 
-  // Compute enclosed land metrics
-  const metrics = useMemo(() => calculateSurveyMetrics(capturedPoints), [capturedPoints]);
+  // Compute enclosed land metrics with display mode
+  const metrics = useMemo(() => calculateSurveyMetrics(capturedPoints, polygonDisplayMode), [capturedPoints, polygonDisplayMode]);
 
   // Default fallback center
   const defaultCenter: [number, number] = roverLocation
@@ -154,14 +156,14 @@ export default function SurveyMap({
       maxNativeZoom: 19,
     },
     street: {
-      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
-      attribution: 'Tiles &copy; Esri',
-      maxNativeZoom: 18,
+      url: 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
+      attribution: '&copy; OpenStreetMap contributors, Tiles style by Humanitarian OpenStreetMap Team',
+      maxNativeZoom: 19,
     },
     topo: {
-      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
-      attribution: 'Tiles &copy; Esri',
-      maxNativeZoom: 18,
+      url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+      attribution: '&copy; OpenTopoMap &copy; OpenStreetMap contributors',
+      maxNativeZoom: 17,
     },
     satellite: {
       url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
@@ -217,40 +219,50 @@ export default function SurveyMap({
     });
   }, []);
 
-  // Intelligent Polygon Centroid Area Marker Icon
-  const centroidIcon = useMemo(() => {
-    if (!metrics) return null;
-    return L.divIcon({
-      className: 'custom-centroid-marker',
-      html: `
-        <div style="background: rgba(15, 23, 42, 0.92); border: 2px solid #38bdf8; border-radius: 12px; padding: 6px 10px; color: #ffffff; font-family: monospace; font-size: 11px; text-align: center; box-shadow: 0 4px 14px rgba(0,0,0,0.4); backdrop-filter: blur(4px); white-space: nowrap;">
-          <div style="font-weight: 800; color: #38bdf8; font-size: 11px;">📐 ENCLOSED LAND AREA</div>
-          <div style="font-weight: 700; font-size: 13px; color: #f8fafc; margin-top: 1px;">
-            ${metrics.areaSqMeters.toLocaleString(undefined, { maximumFractionDigits: 1 })} m²
-          </div>
-          <div style="font-size: 10px; color: #fbbf24; margin-top: 1px;">
-            ${metrics.areaAcres.toFixed(3)} Acres | ${metrics.perimeterMeters.toFixed(1)}m
-          </div>
-        </div>
-      `,
-      iconSize: [160, 54],
-      iconAnchor: [80, 27],
-    });
-  }, [metrics]);
 
-  const createPointIcon = (pointNum: number) => {
+
+  // Distinct Start, End, Outlier & Vertex Point Markers
+  const createCustomPointIcon = (point: CapturedPoint, totalCount: number, isOutlier: boolean) => {
+    const isStart = point.pointNumber === 1;
+    const isEnd = point.pointNumber === totalCount && totalCount > 1;
+
+    let bgStyle = 'background: #0f172a; border: 2px solid #0ea5e9; color: #38bdf8;';
+    let label = `${point.pointNumber}`;
+    let badgeHtml = '';
+
+    if (isStart) {
+      bgStyle = 'background: #065f46; border: 2.5px solid #10b981; color: #ffffff; box-shadow: 0 0 10px rgba(16,185,129,0.6);';
+      badgeHtml = `<div style="position: absolute; bottom: -16px; left: 50%; transform: translateX(-50%); background: #10b981; color: white; font-size: 8px; font-weight: 900; padding: 1px 4px; border-radius: 4px; font-family: monospace; white-space: nowrap;">START</div>`;
+    } else if (isEnd) {
+      bgStyle = 'background: #0e7490; border: 2.5px solid #06b6d4; color: #ffffff; box-shadow: 0 0 10px rgba(6,182,212,0.6);';
+      badgeHtml = `<div style="position: absolute; bottom: -16px; left: 50%; transform: translateX(-50%); background: #06b6d4; color: white; font-size: 8px; font-weight: 900; padding: 1px 4px; border-radius: 4px; font-family: monospace; white-space: nowrap;">END</div>`;
+    } else if (isOutlier) {
+      bgStyle = 'background: #78350f; border: 2.5px solid #f59e0b; color: #fef3c7; box-shadow: 0 0 10px rgba(245,158,11,0.5);';
+      badgeHtml = `<div style="position: absolute; top: -14px; left: 50%; transform: translateX(-50%); background: #f59e0b; color: #78350f; font-size: 8px; font-weight: 900; padding: 0px 3px; border-radius: 3px; font-family: monospace;">⚠️</div>`;
+    }
+
     return L.divIcon({
       className: 'custom-point-marker',
-      html: `<div style="width: 24px; height: 24px; background: #0f172a; border: 2px solid #0ea5e9; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #38bdf8; font-weight: 600; font-size: 11px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); cursor: grab;">${pointNum}</div>`,
-      iconSize: [24, 24],
-      iconAnchor: [12, 12],
-      popupAnchor: [0, -12],
+      html: `
+        <div style="position: relative; display: flex; align-items: center; justify-content: center;">
+          <div style="width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 11px; font-family: monospace; cursor: grab; ${bgStyle}">
+            ${label}
+          </div>
+          ${badgeHtml}
+        </div>
+      `,
+      iconSize: [26, 26],
+      iconAnchor: [13, 13],
+      popupAnchor: [0, -13],
     });
   };
 
   const polygonCoords = useMemo<[number, number][]>(() => {
-    return capturedPoints.map((p) => [p.lat, p.lng]);
+    return capturedPoints.filter((p) => !p.isExcluded).map((p) => [p.lat, p.lng]);
   }, [capturedPoints]);
+
+  const activePointsCount = capturedPoints.filter((p) => !p.isExcluded).length;
+  const outlierIds = metrics?.outlierPointIds || [];
 
   return (
     <div className="relative w-full h-full bg-slate-950 font-sans">
@@ -358,7 +370,7 @@ export default function SurveyMap({
           </Marker>
         )}
 
-        {/* Boundary guide line from last point to active position */}
+        {/* Live guide line from last captured point to active rover position */}
         {roverLocation && capturedPoints.length > 0 && (
           <Polyline
             positions={[
@@ -374,48 +386,78 @@ export default function SurveyMap({
           />
         )}
 
-        {/* Intelligent Enclosed Area Polygon (when 3 or more points exist) */}
-        {capturedPoints.length >= 3 && (
-          <Polygon
-            positions={polygonCoords}
+        {/* Closing Boundary Loop Line (Connects Last Point #N back to Start #1) */}
+        {activePointsCount >= 3 && (
+          <Polyline
+            positions={[
+              [capturedPoints[capturedPoints.length - 1].lat, capturedPoints[capturedPoints.length - 1].lng],
+              [capturedPoints[0].lat, capturedPoints[0].lng],
+            ]}
             pathOptions={{
-              color: '#0284c7',
-              weight: 2.5,
-              fillColor: '#38bdf8',
-              fillOpacity: 0.22,
+              color: '#f59e0b',
+              weight: 2,
+              dashArray: '6, 6',
+              opacity: 0.95,
             }}
           >
             <Popup>
               <div className="p-2 text-xs font-mono text-slate-900 space-y-1">
-                <div className="font-bold text-sky-700 border-b pb-1 border-slate-300">
-                  📐 Intelligent Enclosed Boundary
+                <div className="font-bold text-amber-700 border-b pb-1 border-slate-300">
+                  ⚡ Loop Closing Edge (P{activePointsCount} ➔ P1)
+                </div>
+                {metrics && (
+                  <div>
+                    Closing Gap: <strong className="text-amber-900">{metrics.closureDistanceMeters.toFixed(2)} meters</strong> ({metrics.closureBearingDegrees.toFixed(1)}°)
+                  </div>
+                )}
+              </div>
+            </Popup>
+          </Polyline>
+        )}
+
+        {/* Enclosed Land Area Polygon (when 3 or more points exist) */}
+        {activePointsCount >= 3 && (
+          <Polygon
+            positions={polygonCoords}
+            pathOptions={{
+              color: metrics?.hasKinks ? '#f59e0b' : '#0284c7',
+              weight: 2.5,
+              fillColor: metrics?.hasKinks ? '#fbbf24' : '#38bdf8',
+              fillOpacity: 0.22,
+            }}
+          >
+            <Popup>
+              <div className="p-2.5 text-xs font-mono text-slate-900 space-y-1">
+                <div className="font-bold text-sky-800 border-b pb-1 border-slate-300 flex items-center justify-between">
+                  <span>📐 Survey Boundary Parcel</span>
+                  {metrics?.hasKinks && (
+                    <span className="text-[10px] bg-amber-100 text-amber-800 px-1 rounded font-bold">Unkinked</span>
+                  )}
                 </div>
                 {metrics && (
                   <>
-                    <div className="font-semibold text-slate-800">
-                      Area: {metrics.areaSqMeters.toLocaleString(undefined, { maximumFractionDigits: 1 })} m² ({metrics.areaAcres.toFixed(3)} acres)
+                    <div className="font-bold text-slate-900 text-sm">
+                      {metrics.areaSqMeters.toLocaleString(undefined, { maximumFractionDigits: 1 })} m²
                     </div>
-                    <div>Perimeter: {metrics.perimeterMeters.toFixed(1)} meters</div>
+                    <div className="text-slate-700 font-semibold">
+                      {metrics.areaAcres.toFixed(3)} Acres | {metrics.areaHectares.toFixed(3)} Ha
+                    </div>
+                    <div className="text-amber-800 font-medium">
+                      {metrics.areaGuntha.toFixed(2)} Guntha | {metrics.areaBigha.toFixed(3)} Bigha
+                    </div>
+                    <div className="text-slate-600 border-t pt-1 mt-1">
+                      Perimeter: {metrics.perimeterMeters.toFixed(1)}m ({metrics.perimeterFeet.toFixed(1)} ft)
+                    </div>
                   </>
                 )}
-                <div className="text-[10px] text-slate-500">Vertices: {capturedPoints.length} points</div>
+                <div className="text-[10px] text-slate-500">Vertices: {activePointsCount} points</div>
               </div>
             </Popup>
           </Polygon>
         )}
 
-        {/* Intelligent Centroid Area Badge Marker */}
-        {metrics && metrics.centroid && capturedPoints.length >= 3 && centroidIcon && (
-          <Marker
-            position={[metrics.centroid.lat, metrics.centroid.lng]}
-            icon={centroidIcon}
-            interactive={false}
-            zIndexOffset={800}
-          />
-        )}
-
         {/* Polyline for 2 points */}
-        {capturedPoints.length === 2 && (
+        {activePointsCount === 2 && (
           <Polyline
             positions={polygonCoords}
             pathOptions={{
@@ -426,45 +468,54 @@ export default function SurveyMap({
         )}
 
         {/* Boundary Vertex Markers (Draggable for Manual Editing!) */}
-        {capturedPoints.map((point) => (
-          <Marker
-            key={point.id}
-            position={[point.lat, point.lng]}
-            icon={createPointIcon(point.pointNumber)}
-            draggable={true}
-            eventHandlers={{
-              click: () => onSelectPoint && onSelectPoint(point),
-              dragend: (e) => {
-                const marker = e.target;
-                const pos = marker.getLatLng();
-                if (onUpdatePointLocation) {
-                  onUpdatePointLocation(point.id, pos.lat, pos.lng);
-                }
-              },
-            }}
-          >
-            <Popup>
-              <div className="p-1.5 text-xs font-mono text-slate-100">
-                <div className="font-semibold text-sky-400 border-b border-slate-700 pb-1 mb-1 flex items-center justify-between">
-                  <span>Point #{point.pointNumber}</span>
-                  <span className="text-[9px] bg-slate-800 px-1 py-0.5 rounded text-slate-400">Draggable</span>
+        {capturedPoints.map((point) => {
+          const isOutlier = outlierIds.includes(point.id);
+          return (
+            <Marker
+              key={point.id}
+              position={[point.lat, point.lng]}
+              icon={createCustomPointIcon(point, capturedPoints.length, isOutlier)}
+              draggable={true}
+              eventHandlers={{
+                click: () => onSelectPoint && onSelectPoint(point),
+                dragend: (e) => {
+                  const marker = e.target;
+                  const pos = marker.getLatLng();
+                  if (onUpdatePointLocation) {
+                    onUpdatePointLocation(point.id, pos.lat, pos.lng);
+                  }
+                },
+              }}
+            >
+              <Popup>
+                <div className="p-1.5 text-xs font-mono text-slate-100 min-w-[160px]">
+                  <div className="font-semibold text-sky-400 border-b border-slate-700 pb-1 mb-1 flex items-center justify-between">
+                    <span>Point #{point.pointNumber} {point.pointNumber === 1 ? '(START)' : point.pointNumber === capturedPoints.length ? '(END)' : ''}</span>
+                    <span className="text-[9px] bg-slate-800 px-1 py-0.5 rounded text-slate-400">Draggable</span>
+                  </div>
+                  <div>Lat: {point.lat.toFixed(7)}°</div>
+                  <div>Lng: {point.lng.toFixed(7)}°</div>
+                  {isOutlier && (
+                    <div className="text-amber-400 text-[10px] font-bold mt-1">
+                      ⚠️ Potential GPS Outlier Spike
+                    </div>
+                  )}
+                  <div className="text-[10px] text-slate-400 mt-1">Drag marker on map to adjust location</div>
                 </div>
-                <div>Lat: {point.lat.toFixed(7)}°</div>
-                <div>Lng: {point.lng.toFixed(7)}°</div>
-                <div className="text-[10px] text-slate-400 mt-1">Drag marker on map to adjust location</div>
-              </div>
-            </Popup>
-          </Marker>
-        ))}
+              </Popup>
+            </Marker>
+          );
+        })}
       </MapContainer>
 
-      {/* Floating Map Controls (Mobile Top-Left below search, Desktop Bottom-Left) */}
-      <div className="absolute top-16 left-4 z-[450] md:bottom-6 md:top-auto md:left-6 flex items-center space-x-2 font-sans">
-        <div className="bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-xl p-1.5 flex items-center space-x-1.5 shadow-xl">
+
+      {/* Floating Map Controls (Mobile Top-Left below search/banners, Desktop Bottom-Left) */}
+      <div className="absolute top-28 left-3 z-[440] md:top-auto md:bottom-6 md:left-6 flex items-center space-x-2 font-sans pointer-events-auto">
+        <div className="bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-xl p-1.5 flex items-center space-x-1.5 shadow-xl shrink-0">
           <button
             onClick={() => setLocalCenterTrigger((prev) => prev + 1)}
             title="Center Map on Active Position"
-            className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-medium rounded-lg text-slate-200 hover:text-white bg-blue-600 hover:bg-blue-500 shadow-sm transition"
+            className="hidden md:flex items-center space-x-1.5 px-3 py-1.5 text-xs font-medium rounded-lg text-slate-200 hover:text-white bg-blue-600 hover:bg-blue-500 shadow-sm transition"
           >
             <LocateFixed className="w-3.5 h-3.5" />
             <span>Center Location</span>
@@ -483,7 +534,7 @@ export default function SurveyMap({
               )
             }
             title="Switch Map Style"
-            className="flex items-center space-x-1 px-3 py-1.5 text-xs font-medium rounded-lg text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 transition"
+            className="flex items-center space-x-1 px-2.5 py-1.5 text-xs font-medium rounded-lg text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 transition"
           >
             <Layers className="w-3.5 h-3.5 text-sky-400" />
             <span className="capitalize">{mapType}</span>
@@ -492,7 +543,7 @@ export default function SurveyMap({
           <button
             onClick={onToggleAutoFollow}
             title={autoFollow ? 'Auto-follow active position' : 'Free camera'}
-            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition ${
+            className={`px-2.5 py-1.5 text-xs font-medium rounded-lg transition ${
               autoFollow
                 ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
                 : 'bg-slate-800 text-slate-400 hover:text-white'
@@ -502,6 +553,37 @@ export default function SurveyMap({
           </button>
         </div>
       </div>
+
+      {/* Land Parcel Area HUD Badge (Mobile: Top Center below search; Desktop: Bottom Left) */}
+      {metrics && activePointsCount >= 3 && (
+        <div className="absolute top-14 left-3 right-3 md:top-auto md:right-auto md:bottom-6 md:left-[22rem] z-[445] pointer-events-auto font-sans flex justify-center md:block animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="bg-slate-900/95 backdrop-blur-md border border-sky-500/40 rounded-xl p-2 px-3 flex items-center space-x-2.5 text-white shadow-2xl max-w-full">
+            <div className="w-7 h-7 rounded-lg bg-sky-500/15 border border-sky-500/30 flex items-center justify-center shrink-0">
+              <span className="text-sm">📐</span>
+            </div>
+            <div className="flex flex-col min-w-0">
+              <div className="flex items-center space-x-1.5">
+                <span className="text-[10px] font-extrabold text-sky-400 font-mono tracking-wider uppercase truncate">
+                  Land Parcel Area
+                </span>
+                {metrics.hasKinks && (
+                  <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1 rounded border border-amber-500/40 font-mono font-bold shrink-0">
+                    UNKINKED
+                  </span>
+                )}
+              </div>
+              <div className="flex items-baseline space-x-1.5 font-mono truncate">
+                <span className="text-xs md:text-sm font-extrabold text-white">
+                  {metrics.areaSqMeters.toLocaleString(undefined, { maximumFractionDigits: 1 })} m²
+                </span>
+                <span className="text-[10px] md:text-[11px] text-amber-300 font-semibold truncate">
+                  ({metrics.areaAcres.toFixed(3)} Ac | {metrics.areaHectares.toFixed(3)} Ha | {metrics.areaGuntha.toFixed(1)} Guntha)
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

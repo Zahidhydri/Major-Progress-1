@@ -14,6 +14,7 @@ interface DynamicMapProps {
   onUpdatePointLocation?: (id: string, lat: number, lng: number) => void;
   searchedPlace?: GeocodedPlace | null;
   mapStyle?: 'osm' | 'street' | 'topo' | 'satellite';
+  polygonDisplayMode?: 'captured' | 'auto_uncross' | 'convex_hull' | 'smooth_spline';
   centerOnUserTrigger?: number;
 }
 
